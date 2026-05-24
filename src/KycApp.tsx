@@ -1,18 +1,18 @@
 import { useCameraPermissions, useMicrophonePermissions } from 'expo-camera';
 import { useCallback, useEffect, useRef, useReducer } from 'react';
 
-import { HomeScreen } from './screens/HomeScreen';
-import { ConsentScreen } from './screens/ConsentScreen';
-import { PermissionsScreen } from './screens/PermissionsScreen';
-import { CameraCaptureScreen } from './screens/CameraCaptureScreen';
-import { CaptureReviewScreen } from './screens/CaptureReviewScreen';
-import { LivenessScreen } from './screens/LivenessScreen';
-import { ProcessingScreen } from './screens/ProcessingScreen';
-import { ResultScreen } from './screens/ResultScreen';
-import { createInitialState, kycReducer } from './state/kycReducer';
-import { scoreKycSession } from './services/scoring';
-import { getTrueDepthSignals } from './services/trueDepth';
-import type { CaptureArtifacts, LivenessSignal, PermissionSignals, QualitySignals } from './types/kyc';
+import { HomeScreen } from './shared/screens/HomeScreen';
+import { ConsentScreen } from './shared/screens/ConsentScreen';
+import { PermissionsScreen } from './shared/screens/PermissionsScreen';
+import { CameraCaptureScreen } from './shared/screens/CameraCaptureScreen';
+import { CaptureReviewScreen } from './shared/screens/CaptureReviewScreen';
+import { LivenessScreen } from './shared/screens/LivenessScreen';
+import { ProcessingScreen } from './shared/screens/ProcessingScreen';
+import { ResultScreen } from './shared/screens/ResultScreen';
+import { createInitialState, kycReducer } from './shared/state/kycReducer';
+import { scoreKycSession } from './shared/services/scoring';
+import { getPlatformCapabilities } from './platform';
+import type { CaptureArtifacts, LivenessSignal, PermissionSignals, QualitySignals } from './shared/types/kyc';
 
 export function KycApp() {
   const [state, dispatch] = useReducer(kycReducer, undefined, createInitialState);
@@ -73,7 +73,8 @@ export function KycApp() {
 
     const process = async () => {
       dispatch({ type: 'SET_BUSY', payload: true });
-      const trueDepth = await getTrueDepthSignals();
+      const capabilities = getPlatformCapabilities();
+      const trueDepth = await capabilities.trueDepth.getSignals();
 
       if (canceled) {
         return;

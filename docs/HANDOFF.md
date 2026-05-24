@@ -185,7 +185,7 @@ Mapping into existing scoring:
 
 Do not split the entire flow into separate iOS and Android apps. Split only platform-specific native analysis and camera provider code.
 
-Recommended structure:
+Current structure:
 
 ```text
 src/
@@ -211,19 +211,20 @@ src/
 
 Migration guidance:
 
-- Move current reusable files from `src/components`, `src/screens`, `src/state`, `src/services/scoring.ts`, and `src/types` into `src/shared` when native providers are introduced.
+- Reusable files have already been moved into `src/shared`.
 - Keep `KycApp` and the reducer shared.
-- Add a platform resolver, for example `src/platform/index.ts`, that chooses iOS, Android, or fallback providers based on `Platform.OS` and native capability checks.
+- `src/platform/index.ts` already chooses iOS, Android, or fallback providers based on `Platform.OS`.
 - Keep provider outputs normalized to shared `FaceQualityResult` and `LivenessAnalysisResult`.
 - Avoid duplicating copy, screens, scoring thresholds, and result handling per platform.
 
 ## Code Areas to Touch
 
-- `src/screens/CameraCaptureScreen.tsx`: real-time gating or capture trigger behavior.
-- `src/screens/CaptureReviewScreen.tsx`: replace or keep as fallback when native analysis is unavailable.
-- `src/types/kyc.ts`: extend quality/provider signal types.
-- `src/services/scoring.ts`: score native quality signals without adding identity claims.
-- `src/services/trueDepth.ts`: replace stub when iOS TrueDepth module exists.
+- `src/shared/screens/CameraCaptureScreen.tsx`: real-time gating or capture trigger behavior.
+- `src/shared/screens/CaptureReviewScreen.tsx`: replace or keep as fallback when native analysis is unavailable.
+- `src/shared/types/kyc.ts`: extend shared quality/session signal types.
+- `src/shared/services/scoring.ts`: score native quality signals without adding identity claims.
+- `src/platform/android/*`: replace Android fallback analyzers with ML Kit or VisionCamera frame signals.
+- `src/platform/ios/*`: replace iOS fallback analyzers with Vision/ARKit/AVFoundation/TrueDepth signals.
 - `app.json`: add config plugins and native permissions only when the relevant native module is introduced.
 
 ## Acceptance Criteria

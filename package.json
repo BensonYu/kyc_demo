@@ -1,0 +1,30 @@
+{
+  "name": "kyc-demo",
+  "version": "1.0.0",
+  "private": true,
+  "main": "index.ts",
+  "scripts": {
+    "start": "expo start",
+    "android": "expo start --android",
+    "ios": "expo start --ios",
+    "web": "expo start --web",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "expo": "~56.0.4",
+    "expo-camera": "~56.0.7",
+    "expo-file-system": "~56.0.7",
+    "expo-status-bar": "~56.0.4",
+    "lucide-react-native": "^0.555.0",
+    "react": "19.2.3",
+    "react-native": "0.85.3",
+    "react-native-safe-area-context": "~5.7.0",
+    "react-native-svg": "15.15.4"
+  },
+  "devDependencies": {
+    "@types/react": "~19.2.2",
+    "typescript": "~6.0.3",
+    "vitest": "^4.0.14"
+  }
+}

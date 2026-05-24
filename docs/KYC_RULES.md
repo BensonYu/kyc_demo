@@ -41,16 +41,6 @@ The scoring engine produces three possible decisions:
 | `challengeTimeout` | boolean | Challenge exceeded time limit. |
 | `challengeAttempts` | number | Number of attempts in the session. |
 
-### Biometric Signals
-
-| Signal | Type | Description |
-| --- | --- | --- |
-| `biometricSupported` | boolean | System biometric prompt is supported. |
-| `biometricEnrolled` | boolean | User has enrolled a biometric factor. |
-| `biometricResult` | enum | `authenticated`, `failed`, `canceled`, `unsupported`, `not_enrolled`. |
-
-Biometric authentication is an optional confidence signal. It must not replace capture or liveness rules.
-
 ### iOS TrueDepth Enhancement Signals
 
 These signals are optional and iOS-only:
@@ -96,9 +86,6 @@ Start at `0`. Add risk points for weak or failed signals:
 | Lighting too dark or too bright | +15 |
 | Blur too high | +20 |
 | Occlusion detected | +20 |
-| Biometric supported but failed | +10 |
-| Biometric canceled | +5 |
-| Biometric unsupported or not enrolled | +0 |
 | Challenge required more than one attempt | +10 |
 | Retry count is 1 | +10 |
 | Retry count is 2 or more | +20 |
@@ -110,7 +97,6 @@ Subtract confidence points for strong signals:
 
 | Condition | Risk Points |
 | --- | ---: |
-| Biometric authenticated | -10 |
 | Face centered | -5 |
 | Brightness acceptable | -5 |
 | Blur acceptable | -5 |
@@ -143,7 +129,6 @@ Use deterministic presets during development and demos:
 - Single centered face.
 - Lighting, blur, and occlusion all acceptable.
 - Liveness challenge passes on first attempt.
-- Biometric authenticated or unsupported.
 - Expected decision: `pass`.
 
 ### Poor Quality Retry
@@ -168,7 +153,6 @@ Use deterministic presets during development and demos:
 - Photo and video captured.
 - Single face detected.
 - Liveness passes after a retry.
-- Biometric canceled.
 - One quality signal is weak.
 - Expected decision: `manual_review`.
 

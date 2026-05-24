@@ -7,7 +7,7 @@ Build a high-fidelity front-end KYC demo with React and Expo. The product must c
 1. Ask for privacy consent and camera/microphone permissions.
 2. Capture a face photo.
 3. Record a 5-second selfie video.
-4. Attempt optional system biometric authentication.
+4. Ask the user to confirm photo quality for the demo.
 5. Run a cross-platform liveness challenge.
 6. Run local quality checks and mock risk scoring.
 7. Show pass, retry, or manual review.
@@ -20,24 +20,26 @@ This is a demo, not a compliant production KYC system. Do not claim real identit
 - Use React and Expo. Prefer Expo SDK capabilities before adding native code.
 - Prioritize iOS and Android real devices.
 - Keep all sensitive capture artifacts local to the app sandbox or temporary storage.
-- Avoid uploading photos, videos, biometric signals, or risk results.
-- Treat all scoring as mock/heuristic logic for demo purposes.
+- Avoid uploading photos, videos, liveness signals, or risk results.
+- Treat current scoring as mock/heuristic logic for demo purposes, but design native liveness work as an in-house replacement for third-party KYC SDKs.
 
 ## Biometrics and TrueDepth Boundaries
 
-- `expo-local-authentication` can request system authentication such as Face ID, Touch ID, or Android biometrics, but it only returns success/failure/cancel states.
+- Do not use Face ID, Touch ID, or Android device biometrics as a KYC signal in MVP.
+- `expo-local-authentication` can request system authentication, but device-owner authentication is not identity verification of the person in the camera frame.
 - The app cannot access Face ID enrollment data, identity templates, or Apple's internal Face ID matching result.
 - iOS apps can use TrueDepth camera/depth/face tracking data through native Apple APIs, but Expo Camera does not expose a TrueDepth/depth API directly.
 - TrueDepth support must be implemented as an iOS enhancement using native code, such as an Expo Module plus an EAS development build.
-- Android must gracefully use fallback liveness checks such as action challenges, video quality checks, and optional BiometricPrompt through Expo LocalAuthentication.
+- Android must use fallback liveness checks such as action challenges and video quality checks.
 
 ## Implementation Preferences
 
 - Model the KYC flow as an explicit state machine or a small typed reducer.
 - Keep capture, liveness, scoring, and result presentation separate.
+- When native liveness work starts, keep shared flow code in `src/shared` and isolate OS-specific analyzers in `src/platform/ios` and `src/platform/android`.
 - Use deterministic mock scoring so pass/retry/review states can be tested.
 - Prefer clear user recovery paths over silent failures.
-- Keep UI copy honest: use "demo verification", "local checks", and "risk score" instead of "verified identity" unless a real provider is added later.
+- Keep UI copy honest: use "demo verification", "local checks", and "risk score" instead of "verified identity" until the in-house liveness implementation is production validated.
 
 ## Expected Documentation
 
@@ -45,6 +47,7 @@ This is a demo, not a compliant production KYC system. Do not claim real identit
 - `docs/TECH_DESIGN.md`: React/Expo architecture, device capabilities, and TrueDepth enhancement path.
 - `docs/KYC_RULES.md`: local heuristic scoring and decision states.
 - `docs/UX_FLOW.md`: screens, states, and recovery paths.
+- `docs/HANDOFF.md`: next-phase handoff for native ML Kit, VisionCamera face detector, and iOS TrueDepth integration.
 
 ## Test Expectations
 
@@ -52,6 +55,6 @@ Before considering a feature done, verify:
 
 - Permission states: first allow, deny, return from settings.
 - Camera capture: successful photo, 5-second video, cancel while recording.
-- Liveness: biometric available, unavailable, canceled, fallback challenge pass/fail.
+- Liveness: challenge pass/fail and photo quality approval/retry.
 - Scoring: pass, retry, and manual review are reproducible.
-- Platform behavior: iOS and Android real devices; Face ID/TrueDepth require development builds, not Expo Go alone.
+- Platform behavior: iOS and Android real devices; TrueDepth requires a development build, not Expo Go alone.

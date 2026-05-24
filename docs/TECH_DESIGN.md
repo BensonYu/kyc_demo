@@ -9,7 +9,7 @@ Core modules:
 - App shell and navigation.
 - Permission manager.
 - Camera capture module.
-- Biometric authentication module.
+- Capture review module.
 - Liveness challenge module.
 - Local quality check module.
 - Mock scoring engine.
@@ -19,9 +19,8 @@ Recommended libraries:
 
 - React Native through Expo.
 - `expo-camera` for camera preview, still photo capture, and 5-second video recording.
-- `expo-local-authentication` for optional Face ID, Touch ID, or Android biometric authentication.
 - `expo-file-system` for local session artifact handling.
-- Expo development build for native modules and biometric testing beyond Expo Go.
+- Expo development build for future native modules beyond Expo Go.
 
 ## 2. Runtime Boundaries
 
@@ -48,7 +47,7 @@ Recommended states:
 | `cameraReady` | Camera preview is visible and ready. |
 | `capturingPhoto` | App is taking the face photo. |
 | `recordingVideo` | App is recording the 5-second selfie video. |
-| `biometricCheck` | App is attempting optional system biometric authentication. |
+| `captureReview` | User confirms photo quality before liveness. |
 | `livenessChallenge` | User is completing action challenge fallback/core liveness. |
 | `processing` | App runs quality checks and mock scoring. |
 | `resultPass` | Demo verification passed. |
@@ -64,7 +63,7 @@ Session data should include:
 - Video URI.
 - Video duration.
 - Permission statuses.
-- Biometric availability and result.
+- Photo quality review result.
 - Liveness challenge type and result.
 - Quality check signals.
 - Mock risk score.
@@ -100,30 +99,27 @@ The MVP can start with heuristic or mocked signals if frame-level analysis is no
 - Video duration at least 5 seconds.
 - No obvious camera interruption.
 
-Future implementations may replace mocked quality signals with frame analysis or platform-specific face detection.
+MVP quality signals come from explicit photo review. Future implementations should replace review with in-house frame analysis, platform-native face detection, and liveness checks rather than third-party KYC SDKs.
 
-## 5. Local Biometric Authentication
+## 5. Device Biometrics Boundary
 
-Use `expo-local-authentication` as an optional device-owner confirmation signal.
-
-Expected result categories:
-
-- Supported and authenticated.
-- Supported but failed.
-- Supported but canceled.
-- Unsupported.
-- Not enrolled.
-- Temporarily unavailable.
+Do not use Face ID, Touch ID, or Android device biometrics as a KYC signal in MVP.
 
 Important boundary:
 
-- This does not prove the captured face is the same person as the device owner.
-- This does not expose Face ID templates, enrolled face data, or Apple's Face ID matching internals.
-- This result should lower risk slightly when successful, but must not replace liveness challenge or capture quality checks.
+- Device biometrics only authenticate the device owner to the OS.
+- They do not prove the person in the camera frame is alive or is the same person.
+- The app cannot access Face ID templates, enrolled face data, or Apple's Face ID matching internals.
+- If device-owner authentication is ever added later, it must be labeled as device confirmation, not KYC liveness or identity verification.
 
 ## 6. Cross-Platform Liveness Challenge
 
 The cross-platform MVP liveness method is an action challenge.
+
+The next production-oriented direction is an in-house liveness module with two modes:
+
+- Silent liveness: passive checks from camera frames, face box stability, brightness, blur, motion continuity, depth when available, and presentation-attack signals.
+- Action liveness: randomized prompts such as blink, open mouth, turn head, nod, or shake head, verified from platform-native face landmarks/pose/depth signals.
 
 Recommended challenge set:
 
@@ -150,6 +146,7 @@ Correct capability boundary:
 - iOS apps can access TrueDepth camera/depth and ARKit face tracking through native Apple APIs.
 - Expo Camera does not directly expose TrueDepth depth data or ARKit face tracking.
 - The app cannot access Face ID enrollment data, identity templates, or Apple's internal Face ID identity matching.
+- TrueDepth enhancement must not be described as calling Face ID.
 
 Recommended implementation path:
 
@@ -172,8 +169,8 @@ TrueDepth should improve confidence but must degrade gracefully on unsupported d
 
 Android does not have a universal equivalent to iOS TrueDepth. The app should use:
 
-- `expo-local-authentication` for optional biometric authentication where available.
-- Action challenge liveness.
+- Android native ML Kit face detection for face box, landmarks, eye-open probability, and pose signals.
+- Action challenge liveness verified from Android-native signals.
 - Video duration and quality checks.
 - Manual review state when signals are mixed.
 
@@ -187,7 +184,6 @@ Inputs:
 
 - Capture quality signals.
 - Liveness challenge result.
-- Biometric result.
 - TrueDepth enhancement signals, when available.
 - Retry count.
 
@@ -199,7 +195,42 @@ Outputs:
 
 The engine must be local and must not send data over the network.
 
-## 10. Error Handling
+## 10. Platform Code Organization
+
+When native liveness work starts, split the code by capability layer, not by duplicating the entire product flow.
+
+Recommended structure:
+
+```text
+src/
+  shared/
+    components/
+    screens/
+    state/
+    services/
+    types/
+  platform/
+    android/
+      faceAnalyzer.ts
+      livenessAnalyzer.ts
+      cameraProvider.ts
+    ios/
+      faceAnalyzer.ts
+      livenessAnalyzer.ts
+      trueDepthProvider.ts
+      cameraProvider.ts
+    fallback/
+      manualReviewAnalyzer.ts
+```
+
+Rules:
+
+- Keep the KYC flow, reducer/state machine, scoring, result copy, and shared UI in `src/shared`.
+- Put only OS-specific capture and analysis implementations in `src/platform/android` and `src/platform/ios`.
+- Add a platform resolver that chooses iOS, Android, or fallback providers based on `Platform.OS` and capability checks.
+- Keep provider outputs normalized so the shared flow can consume the same `QualitySignals`, liveness result, and scoring contract.
+
+## 11. Error Handling
 
 Required recoverable errors:
 
@@ -208,8 +239,6 @@ Required recoverable errors:
 - Camera unavailable.
 - Recording failed.
 - Video shorter than 5 seconds.
-- Biometric prompt canceled.
-- Biometric unsupported.
 - Liveness challenge timeout.
 - File artifact unavailable.
 
@@ -217,13 +246,11 @@ All errors should provide a next action:
 
 - Retry.
 - Open settings.
-- Continue without optional biometric.
 - Restart session.
 
-## 11. Build and Verification Notes
+## 12. Build and Verification Notes
 
 - Expo Go can validate most React UI and basic camera behavior.
-- Face ID usage requires `NSFaceIDUsageDescription`.
-- Face ID, custom native modules, and TrueDepth enhancement should be verified with an Expo development build.
+- Custom native modules and TrueDepth enhancement should be verified with an Expo development build.
 - TrueDepth must be tested on a supported iPhone with a TrueDepth front camera.
-- Android biometric behavior must be tested on a real enrolled device.
+- See `docs/HANDOFF.md` for the recommended next-phase plan for Android ML Kit, VisionCamera face detector, and iOS TrueDepth integration.

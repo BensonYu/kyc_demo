@@ -16,7 +16,7 @@
 | Consent | Explain local capture and demo use. | 同意并继续 |
 | Permissions | Request camera and microphone access. | 授权 |
 | Camera Capture | Align face, capture photo, record video. | 开始拍摄 |
-| Biometric Check | Optional system authentication. | 继续 |
+| Capture Review | Confirm face is in frame and clear. | 确认照片合格 |
 | Liveness Challenge | Complete action challenge. | 完成动作 |
 | Processing | Run local checks and scoring. | None |
 | Result Pass | Show successful demo result. | 完成 |
@@ -44,7 +44,7 @@ Content:
 - Explain that the app will use camera and microphone.
 - Explain that photo/video are used for local demo checks.
 - Explain that no backend upload occurs in MVP.
-- Explain that system biometric authentication may be requested if supported.
+- Explain that current MVP requires photo quality confirmation and does not use Face ID as KYC.
 
 Primary action:
 
@@ -60,10 +60,6 @@ Required system permissions:
 
 - Camera.
 - Microphone.
-
-Optional:
-
-- Local authentication prompt happens later and should not be presented as a normal permission.
 
 States:
 
@@ -88,7 +84,7 @@ Happy path:
 2. App captures photo.
 3. App starts 5-second video recording.
 4. Progress reaches 5 seconds.
-5. App stops recording and continues.
+5. App stops recording and continues to photo review.
 
 Recovery states:
 
@@ -98,24 +94,22 @@ Recovery states:
 - Multiple faces: "请确保画面中只有本人。"
 - Recording interrupted: "录制被中断，请重新开始。"
 
-### Biometric Check
+### Capture Review
 
 Purpose:
 
-- Add optional confidence that the device owner approved the session.
+- Prevent the flow from accepting an obviously bad capture when automatic face detection is not available in MVP.
 
 Copy:
 
-- "如果设备支持，我们会请求一次本机生物认证作为辅助信号。"
+- "请确认画面中只有一个人脸，并且脸部在框内、清晰、无遮挡。"
 
 Outcomes:
 
-- Authenticated: continue to liveness with positive signal.
-- Failed: continue to liveness with weak signal.
-- Canceled: continue to liveness with neutral/weak signal.
-- Unsupported/not enrolled: continue to liveness without penalty.
+- Confirmed: continue to liveness.
+- Not acceptable: return to camera capture.
 
-The user should never be blocked only because biometric authentication is unavailable.
+This step is a demo quality gate, not automatic identity verification.
 
 ### Liveness Challenge
 
@@ -208,8 +202,7 @@ Secondary action:
 | Camera permission denied | Show settings guidance and retry permission check. |
 | Microphone permission denied | Explain video recording needs microphone access; allow retry. |
 | Camera unavailable | Show device limitation and return home. |
-| User cancels biometric prompt | Continue to liveness. |
-| Biometric unsupported | Continue to liveness. |
+| Face outside frame in review | Ask user to retake. |
 | Video shorter than 5 seconds | Show retry with clear reason. |
 | Multiple faces detected | Ask user to retry alone in frame. |
 | App backgrounded during capture | Cancel current recording and ask user to retry. |
@@ -230,6 +223,7 @@ Avoid:
 - "真实身份已认证"
 - "合规 KYC 已完成"
 - "Face ID 已验证此人身份"
+- "Face ID 可作为 KYC 活体"
 - "防欺诈检测准确"
 
 ## 6. Acceptance Criteria
@@ -237,6 +231,6 @@ Avoid:
 - A user can complete the happy path from Home to Result Pass.
 - A user can recover from denied permissions.
 - A user can retry after capture or liveness failure.
-- Biometric failure does not block the whole flow.
+- Bad photo quality can be rejected and retaken before liveness.
 - Result screens clearly explain pass, retry, and review.
 - The UX never claims production-grade KYC or regulatory compliance.

@@ -3,6 +3,7 @@ import type {
   CaptureArtifacts,
   FaceQualityResult,
   KycSession,
+  KycStartPayload,
   KycState,
   KycStep,
   KycVerificationRoute,
@@ -15,9 +16,11 @@ import type {
 
 export type KycAction =
   | { type: 'START' }
+  | { type: 'START_WITH_LOCAL_STATE'; payload: KycStartPayload }
   | { type: 'BACK_TO_HOME' }
   | { type: 'ACCEPT_CONSENT' }
   | { type: 'SET_PERMISSIONS'; payload: PermissionSignals }
+  | { type: 'SYNC_PERMISSIONS'; payload: PermissionSignals }
   | { type: 'SELECT_VERIFICATION_ROUTE'; payload: KycVerificationRoute }
   | { type: 'SET_BUSY'; payload: boolean }
   | { type: 'SET_ERROR'; payload?: string }
@@ -50,6 +53,16 @@ export function kycReducer(state: KycState, action: KycAction): KycState {
         session: createInitialSession(),
         isBusy: false,
       };
+    case 'START_WITH_LOCAL_STATE':
+      return {
+        step: action.payload.step,
+        session: mergeSession(createInitialSession(), {
+          permissions: action.payload.permissions,
+          verificationRoute: action.payload.verificationRoute,
+        }),
+        isBusy: false,
+        error: undefined,
+      };
     case 'BACK_TO_HOME':
     case 'RESET':
       return createInitialState();
@@ -64,6 +77,14 @@ export function kycReducer(state: KycState, action: KycAction): KycState {
         },
         step: action.payload.cameraGranted && action.payload.microphoneGranted ? 'routeSelection' : 'permissions',
         error: action.payload.cameraGranted && action.payload.microphoneGranted ? undefined : state.error,
+      };
+    case 'SYNC_PERMISSIONS':
+      return {
+        ...state,
+        session: mergeSession(state.session, {
+          permissions: action.payload,
+        }),
+        isBusy: false,
       };
     case 'SELECT_VERIFICATION_ROUTE':
       return {
@@ -87,6 +108,14 @@ export function kycReducer(state: KycState, action: KycAction): KycState {
         isBusy: false,
       };
     case 'CAPTURE_COMPLETE':
+      if (!isCompleteCapture(action.payload)) {
+        return {
+          ...state,
+          isBusy: false,
+          error: '自拍照和 5 秒自拍视频未完整采集，请重新采集。',
+        };
+      }
+
       return {
         ...state,
         session: mergeSession(state.session, {
@@ -202,4 +231,8 @@ function mergeSession(session: KycSession, patch: Partial<KycSession>): KycSessi
     ...session,
     ...patch,
   };
+}
+
+function isCompleteCapture(capture: CaptureArtifacts): boolean {
+  return Boolean(capture.photoUri && capture.videoUri && capture.videoDurationSeconds >= 5);
 }

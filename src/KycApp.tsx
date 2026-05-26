@@ -14,7 +14,17 @@ import { ResultScreen } from './shared/screens/ResultScreen';
 import { createInitialState, kycReducer } from './shared/state/kycReducer';
 import { scoreKycSession } from './shared/services/scoring';
 import { getQualitySignals, isCaptureAnalysisPassing, SELFIE_GUIDE_BOX } from './shared/services/faceQuality';
-import { getDefaultVerificationRoute, shouldShowRouteSelection } from './shared/services/routes';
+import {
+  getDefaultVerificationRoute,
+  getStartDestination,
+  shouldShowRouteSelection,
+} from './shared/services/routes';
+import {
+  type KycLocalPreferences,
+  loadKycLocalPreferences,
+  markConsentAccepted,
+  updateStoredPermissions,
+} from './shared/services/localPreferences';
 import { getPlatformCapabilities } from './platform';
 import type { CaptureArtifacts, LivenessSignal, PermissionSignals, QualitySignals } from './shared/types/kyc';
 
@@ -24,6 +34,7 @@ export function KycApp() {
   const [, requestMicrophonePermission, getMicrophonePermission] = useMicrophonePermissions();
   const processingSessionIdRef = useRef<string | undefined>(undefined);
   const captureAnalysisUriRef = useRef<string | undefined>(undefined);
+  const preferencesRef = useRef<KycLocalPreferences | undefined>(undefined);
 
   const selectDefaultRoute = useCallback(() => {
     dispatch({ type: 'SELECT_VERIFICATION_ROUTE', payload: getDefaultVerificationRoute(Platform.OS) });
@@ -35,21 +46,58 @@ export function KycApp() {
     }
   }, [selectDefaultRoute, state.step]);
 
-  const syncPermissions = useCallback(async () => {
+  const readSystemPermissions = useCallback(async (): Promise<PermissionSignals> => {
+    const [camera, microphone] = await Promise.all([getCameraPermission(), getMicrophonePermission()]);
+
+    return {
+      cameraGranted: camera.granted,
+      microphoneGranted: microphone.granted,
+    };
+  }, [getCameraPermission, getMicrophonePermission]);
+
+  const persistPermissions = useCallback(async (permissions: PermissionSignals) => {
+    preferencesRef.current = await updateStoredPermissions(permissions, preferencesRef.current);
+  }, []);
+
+  const syncPermissionsAndContinue = useCallback(async () => {
     dispatch({ type: 'SET_BUSY', payload: true });
     try {
-      const [camera, microphone] = await Promise.all([getCameraPermission(), getMicrophonePermission()]);
-      dispatch({
-        type: 'SET_PERMISSIONS',
-        payload: {
-          cameraGranted: camera.granted,
-          microphoneGranted: microphone.granted,
-        },
-      });
+      const permissions = await readSystemPermissions();
+      dispatch({ type: 'SET_PERMISSIONS', payload: permissions });
+      await persistPermissions(permissions);
+
+      if (!permissions.cameraGranted || !permissions.microphoneGranted) {
+        dispatch({ type: 'SET_ERROR', payload: '请授权相机和麦克风后继续。' });
+      }
     } catch (error) {
       dispatch({ type: 'SET_ERROR', payload: error instanceof Error ? error.message : '读取权限状态失败。' });
     }
-  }, [getCameraPermission, getMicrophonePermission]);
+  }, [persistPermissions, readSystemPermissions]);
+
+  useEffect(() => {
+    let canceled = false;
+
+    const hydrate = async () => {
+      const [preferences, permissions] = await Promise.all([loadKycLocalPreferences(), readSystemPermissions()]);
+
+      if (canceled) {
+        return;
+      }
+
+      preferencesRef.current = preferences;
+      dispatch({ type: 'SYNC_PERMISSIONS', payload: permissions });
+
+      if (preferences) {
+        persistPermissions(permissions).catch(() => undefined);
+      }
+    };
+
+    hydrate().catch(() => undefined);
+
+    return () => {
+      canceled = true;
+    };
+  }, [persistPermissions, readSystemPermissions]);
 
   const requestPermissions = useCallback(async () => {
     dispatch({ type: 'SET_BUSY', payload: true });
@@ -64,13 +112,72 @@ export function KycApp() {
         payload: permissions,
       });
 
+      await persistPermissions(permissions);
+
       if (!permissions.cameraGranted || !permissions.microphoneGranted) {
         dispatch({ type: 'SET_ERROR', payload: '请授权相机和麦克风后继续。' });
       }
     } catch (error) {
       dispatch({ type: 'SET_ERROR', payload: error instanceof Error ? error.message : '请求权限失败。' });
     }
-  }, [requestCameraPermission, requestMicrophonePermission]);
+  }, [persistPermissions, requestCameraPermission, requestMicrophonePermission]);
+
+  const handleStart = useCallback(async () => {
+    dispatch({ type: 'SET_BUSY', payload: true });
+
+    try {
+      const [preferences, permissions] = await Promise.all([loadKycLocalPreferences(), readSystemPermissions()]);
+      preferencesRef.current = preferences;
+
+      const destination = getStartDestination({
+        platformOS: Platform.OS,
+        preferences,
+        permissions,
+      });
+
+      dispatch({
+        type: 'START_WITH_LOCAL_STATE',
+        payload: {
+          step: destination,
+          permissions,
+          verificationRoute: getDefaultVerificationRoute(Platform.OS),
+        },
+      });
+
+      if (preferences) {
+        persistPermissions(permissions).catch(() => undefined);
+      }
+    } catch (error) {
+      dispatch({ type: 'SET_ERROR', payload: error instanceof Error ? error.message : '读取本地状态失败。' });
+    }
+  }, [persistPermissions, readSystemPermissions]);
+
+  const handleAcceptConsent = useCallback(async () => {
+    dispatch({ type: 'SET_BUSY', payload: true });
+
+    try {
+      const permissions = await readSystemPermissions();
+      const preferences = await markConsentAccepted(permissions);
+      preferencesRef.current = preferences;
+
+      const destination = getStartDestination({
+        platformOS: Platform.OS,
+        preferences,
+        permissions,
+      });
+
+      dispatch({
+        type: 'START_WITH_LOCAL_STATE',
+        payload: {
+          step: destination,
+          permissions,
+          verificationRoute: getDefaultVerificationRoute(Platform.OS),
+        },
+      });
+    } catch (error) {
+      dispatch({ type: 'SET_ERROR', payload: error instanceof Error ? error.message : '保存隐私确认失败。' });
+    }
+  }, [readSystemPermissions]);
 
   useEffect(() => {
     if (state.step !== 'processing') {
@@ -180,11 +287,11 @@ export function KycApp() {
   };
 
   if (state.step === 'idle') {
-    return <HomeScreen onStart={() => dispatch({ type: 'START' })} />;
+    return <HomeScreen onStart={handleStart} />;
   }
 
   if (state.step === 'consent') {
-    return <ConsentScreen onAccept={() => dispatch({ type: 'ACCEPT_CONSENT' })} onBack={() => dispatch({ type: 'BACK_TO_HOME' })} />;
+    return <ConsentScreen onAccept={handleAcceptConsent} onBack={() => dispatch({ type: 'BACK_TO_HOME' })} />;
   }
 
   if (state.step === 'permissions') {
@@ -202,7 +309,7 @@ export function KycApp() {
               selectDefaultRoute();
             }
           } else {
-            syncPermissions();
+            syncPermissionsAndContinue();
           }
         }}
       />
@@ -264,5 +371,5 @@ export function KycApp() {
     return <ResultScreen result={state.session.result} onRetry={() => dispatch({ type: 'RETRY' })} onDone={() => dispatch({ type: 'RESET' })} />;
   }
 
-  return <HomeScreen onStart={() => dispatch({ type: 'START' })} />;
+  return <HomeScreen onStart={handleStart} />;
 }

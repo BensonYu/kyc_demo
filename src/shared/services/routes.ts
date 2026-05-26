@@ -1,4 +1,6 @@
 import type { KycVerificationRoute } from '../types/kyc';
+import type { KycLocalPreferences } from './localPreferencesModel';
+import { hasAcceptedCurrentConsent } from './localPreferencesModel';
 
 export const IOS_VERIFICATION_ROUTES: KycVerificationRoute[] = ['ios_mlkit', 'ios_truedepth'];
 
@@ -24,4 +26,25 @@ export function getAvailableVerificationRoutes(platformOS: string): KycVerificat
   }
 
   return [getDefaultVerificationRoute(platformOS)];
+}
+
+export type StartDestination = 'consent' | 'permissions' | 'routeSelection' | 'camera';
+
+export function getStartDestination(input: {
+  platformOS: string;
+  preferences?: KycLocalPreferences;
+  permissions: {
+    cameraGranted: boolean;
+    microphoneGranted: boolean;
+  };
+}): StartDestination {
+  if (!hasAcceptedCurrentConsent(input.preferences)) {
+    return 'consent';
+  }
+
+  if (!input.permissions.cameraGranted || !input.permissions.microphoneGranted) {
+    return 'permissions';
+  }
+
+  return shouldShowRouteSelection(input.platformOS) ? 'routeSelection' : 'camera';
 }

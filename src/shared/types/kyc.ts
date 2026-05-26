@@ -114,3 +114,9 @@ export type KycState = {
   isBusy: boolean;
   error?: string;
 };
+
+export type KycStartPayload = {
+  step: Extract<KycStep, 'consent' | 'permissions' | 'routeSelection' | 'camera'>;
+  permissions: PermissionSignals;
+  verificationRoute: KycVerificationRoute;
+};

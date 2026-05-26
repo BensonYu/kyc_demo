@@ -1,6 +1,6 @@
 import { CameraView } from 'expo-camera';
 import type { CameraMode } from 'expo-camera';
-import { Camera, RefreshCw, Square } from 'lucide-react-native';
+import { Camera, RefreshCw } from 'lucide-react-native';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -30,20 +30,19 @@ export function CameraCaptureScreen({ sessionId, onCaptureComplete, onError, onC
   const [progress, setProgress] = useState(0);
   const [localError, setLocalError] = useState<string>();
 
-  const isRecording = phase === 'video';
   const isBusy = phase === 'photo' || phase === 'video' || phase === 'saving';
 
   const progressLabel = useMemo(() => {
     if (phase === 'ready') {
-      return '请将脸部放入框内';
+      return '将脸部放入框内，点击后会采集自拍照和 5 秒自拍视频';
     }
 
     if (phase === 'photo') {
-      return '正在采集自拍照';
+      return '正在采集照片和 5 秒自拍视频';
     }
 
     if (phase === 'video') {
-      return `正在录制 ${Math.min(RECORDING_SECONDS, Math.ceil(progress))}/${RECORDING_SECONDS}s`;
+      return `正在采集照片和 5 秒自拍视频 ${Math.min(RECORDING_SECONDS, Math.ceil(progress))}/${RECORDING_SECONDS}s`;
     }
 
     if (phase === 'saving') {
@@ -137,21 +136,13 @@ export function CameraCaptureScreen({ sessionId, onCaptureComplete, onError, onC
     }
   };
 
-  const stopRecording = () => {
-    if (!isRecording) {
-      return;
-    }
-
-    cameraRef.current?.stopRecording();
-  };
-
   return (
     <View style={styles.container}>
       <CameraView ref={cameraRef} style={styles.camera} facing="front" mode={cameraMode} active />
       <SafeAreaView pointerEvents="box-none" style={styles.overlay}>
         <View style={styles.topBar}>
           <Text style={styles.topTitle}>自拍采集</Text>
-          <Text style={styles.topMeta}>照片 + 5 秒视频</Text>
+          <Text style={styles.topMeta}>自拍照 + 5 秒自拍视频</Text>
         </View>
 
         <View pointerEvents="none" style={styles.guideWrap}>
@@ -163,25 +154,21 @@ export function CameraCaptureScreen({ sessionId, onCaptureComplete, onError, onC
           </View>
           <Text style={styles.guideText}>{progressLabel}</Text>
           {localError ? <Text style={styles.errorText}>{localError}</Text> : null}
-          {phase === 'video' ? (
+          {phase === 'photo' || phase === 'video' ? (
             <View style={styles.progressTrack}>
               <View style={[styles.progressFill, { width: `${Math.min(100, (progress / RECORDING_SECONDS) * 100)}%` }]} />
             </View>
           ) : null}
-          {isBusy && phase !== 'video' ? <ActivityIndicator color={colors.white} /> : null}
+          {isBusy ? <ActivityIndicator color={colors.white} /> : null}
         </View>
 
         <View style={styles.footer}>
-          {isRecording ? (
-            <PrimaryButton icon={Square} label="停止录制" onPress={stopRecording} variant="danger" />
-          ) : (
-            <PrimaryButton
-              icon={phase === 'error' ? RefreshCw : Camera}
-              label={phase === 'error' ? '重新拍摄' : '开始拍摄'}
-              onPress={startCapture}
-              disabled={isBusy}
-            />
-          )}
+          <PrimaryButton
+            icon={phase === 'error' ? RefreshCw : Camera}
+            label={phase === 'error' ? '重新采集' : '开始采集'}
+            onPress={startCapture}
+            disabled={isBusy}
+          />
           <PrimaryButton label="返回首页" onPress={onCancel} variant="secondary" disabled={isBusy} />
         </View>
       </SafeAreaView>

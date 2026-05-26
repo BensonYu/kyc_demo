@@ -41,6 +41,11 @@
           "recordAudioAndroid": true
         }
       ]
-    ]
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "59d101fa-7efe-4e97-8dbc-67bc16c14db1"
+      }
+    }
   }
 }

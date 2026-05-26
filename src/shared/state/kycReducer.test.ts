@@ -10,6 +10,57 @@ describe('kycReducer', () => {
     expect(state.session.id).toMatch(/^kyc-/);
   });
 
+  it('starts from local state directly at Android camera when consent and permissions are ready', () => {
+    const state = kycReducer(createInitialState(), {
+      type: 'START_WITH_LOCAL_STATE',
+      payload: {
+        step: 'camera',
+        permissions: {
+          cameraGranted: true,
+          microphoneGranted: true,
+        },
+        verificationRoute: 'android_mlkit',
+      },
+    });
+
+    expect(state.step).toBe('camera');
+    expect(state.session.permissions.cameraGranted).toBe(true);
+    expect(state.session.permissions.microphoneGranted).toBe(true);
+    expect(state.session.verificationRoute).toBe('android_mlkit');
+  });
+
+  it('starts from local state at iOS route selection when route choice is needed', () => {
+    const state = kycReducer(createInitialState(), {
+      type: 'START_WITH_LOCAL_STATE',
+      payload: {
+        step: 'routeSelection',
+        permissions: {
+          cameraGranted: true,
+          microphoneGranted: true,
+        },
+        verificationRoute: 'ios_mlkit',
+      },
+    });
+
+    expect(state.step).toBe('routeSelection');
+    expect(state.session.verificationRoute).toBe('ios_mlkit');
+  });
+
+  it('syncs permissions without changing the current step', () => {
+    const started = kycReducer(createInitialState(), { type: 'START' });
+    const synced = kycReducer(started, {
+      type: 'SYNC_PERMISSIONS',
+      payload: {
+        cameraGranted: true,
+        microphoneGranted: true,
+      },
+    });
+
+    expect(synced.step).toBe('consent');
+    expect(synced.session.permissions.cameraGranted).toBe(true);
+    expect(synced.session.permissions.microphoneGranted).toBe(true);
+  });
+
   it('moves to route selection when required permissions are granted', () => {
     const state = kycReducer(createInitialState(), {
       type: 'SET_PERMISSIONS',
@@ -45,7 +96,24 @@ describe('kycReducer', () => {
     });
 
     expect(state.step).toBe('captureReview');
+    expect(state.session.capture.photoUri).toBeTruthy();
+    expect(state.session.capture.videoUri).toBeTruthy();
+    expect(state.session.capture.videoDurationSeconds).toBeGreaterThanOrEqual(5);
     expect(state.session.capture.videoDurationSeconds).toBe(5);
+  });
+
+  it('does not accept incomplete capture artifacts', () => {
+    const state = kycReducer(createInitialState(), {
+      type: 'CAPTURE_COMPLETE',
+      payload: {
+        photoUri: 'file:///photo.jpg',
+        videoDurationSeconds: 4.5,
+        cameraInterrupted: false,
+      },
+    });
+
+    expect(state.step).toBe('idle');
+    expect(state.error).toContain('未完整采集');
   });
 
   it('stores post-capture face analysis without leaving review', () => {
@@ -107,20 +175,24 @@ describe('kycReducer', () => {
   });
 
   it('keeps permissions and increments retry count on retry', () => {
-    const granted = kycReducer(createInitialState(), {
-      type: 'SET_PERMISSIONS',
+    const ready = kycReducer(createInitialState(), {
+      type: 'START_WITH_LOCAL_STATE',
       payload: {
-        cameraGranted: true,
-        microphoneGranted: true,
+        step: 'camera',
+        permissions: {
+          cameraGranted: true,
+          microphoneGranted: true,
+        },
+        verificationRoute: 'android_mlkit',
       },
     });
 
-    const retried = kycReducer(granted, { type: 'RETRY' });
+    const retried = kycReducer(ready, { type: 'RETRY' });
 
     expect(retried.step).toBe('camera');
     expect(retried.session.retryCount).toBe(1);
     expect(retried.session.permissions.cameraGranted).toBe(true);
-    expect(retried.session.verificationRoute).toBe('manual_fallback');
+    expect(retried.session.verificationRoute).toBe('android_mlkit');
   });
 
   it('resets to idle', () => {

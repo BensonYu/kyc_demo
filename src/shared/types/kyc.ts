@@ -2,6 +2,7 @@ export type KycStep =
   | 'idle'
   | 'consent'
   | 'permissions'
+  | 'routeSelection'
   | 'camera'
   | 'captureReview'
   | 'liveness'
@@ -9,6 +10,8 @@ export type KycStep =
   | 'result';
 
 export type KycDecision = 'pass' | 'retry' | 'manual_review';
+
+export type KycVerificationRoute = 'android_mlkit' | 'ios_mlkit' | 'ios_truedepth' | 'manual_fallback';
 
 export type LivenessChallengeType = 'blink' | 'turn_head' | 'open_mouth';
 
@@ -41,7 +44,7 @@ export type NormalizedFaceBox = {
 };
 
 export type FaceQualityResult = QualitySignals & {
-  provider: 'manual_review' | 'android_mlkit' | 'vision_camera' | 'ios_truedepth';
+  provider: 'manual_review' | 'android_mlkit' | 'ios_mlkit' | 'vision_camera' | 'ios_truedepth';
   platformRoute: 'ios' | 'android' | 'fallback';
   faceBox?: NormalizedFaceBox;
   faceCount?: number;
@@ -95,6 +98,7 @@ export type KycSession = {
   id: string;
   createdAt: string;
   retryCount: number;
+  verificationRoute: KycVerificationRoute;
   permissions: PermissionSignals;
   capture: CaptureArtifacts;
   captureAnalysis?: FaceQualityResult;

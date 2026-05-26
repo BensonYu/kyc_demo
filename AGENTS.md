@@ -38,6 +38,8 @@ This is a demo, not a compliant production KYC system. Do not claim real identit
 - Keep capture, liveness, scoring, and result presentation separate.
 - When native liveness work starts, keep shared flow code in `src/shared` and isolate OS-specific analyzers in `src/platform/ios` and `src/platform/android`.
 - Android post-capture face analysis currently uses local Expo Module `modules/kyc-face-analyzer` with ML Kit; it requires a development build and must fall back cleanly in Expo Go.
+- iOS post-capture face analysis uses the same local Expo Module with `GoogleMLKit/FaceDetection`; the iOS route selection screen offers ML Kit and TrueDepth routes.
+- The current TrueDepth route is only a state/provider stub with manual fallback copy. Do not claim depth liveness until ARKit/AVFoundation signals are actually implemented and verified.
 - Use deterministic mock scoring so pass/retry/review states can be tested.
 - Prefer clear user recovery paths over silent failures.
 - Keep UI copy honest: use "demo verification", "local checks", and "risk score" instead of "verified identity" until the in-house liveness implementation is production validated.

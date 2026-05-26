@@ -39,15 +39,16 @@ This product is not a production KYC solution. It does not verify a government i
 1. User opens the app and sees a single primary action: "开始 KYC".
 2. User reviews a short privacy and consent message.
 3. App requests camera and microphone permissions.
-4. App opens the front camera.
-5. User aligns their face in the frame.
-6. App captures a still face photo.
-7. App records a 5-second selfie video.
-8. User reviews the captured photo and confirms that a single face is in frame, clear, and unobstructed.
-9. If photo quality is not acceptable, the user retakes the capture.
-10. User completes one or two simple action challenges, such as blink, turn head, or open mouth.
-11. App runs local quality checks and mock risk scoring.
-12. App shows one of three outcomes:
+4. On iOS, user chooses either the ML Kit face detection route or the TrueDepth enhancement route. Android uses the Android ML Kit route by default.
+5. App opens the front camera.
+6. User aligns their face in the frame.
+7. App captures a still face photo.
+8. App records a 5-second selfie video.
+9. The app runs post-capture ML Kit face analysis when available, or falls back to explicit manual photo confirmation.
+10. If photo quality is not acceptable, the user retakes the capture.
+11. User completes one or two simple action challenges, such as blink, turn head, or open mouth.
+12. App runs local quality checks and mock risk scoring.
+13. App shows one of three outcomes:
    - Pass: demo verification succeeded.
    - Retry: capture quality or liveness was insufficient.
    - Manual review: signals are mixed and would require human review in a real system.
@@ -61,6 +62,8 @@ This product is not a production KYC solution. It does not verify a government i
 - Camera and microphone permission handling.
 - Front-camera photo capture.
 - 5-second selfie video recording.
+- Android and iOS ML Kit post-capture face analysis in development builds.
+- iOS route selection for ML Kit vs. TrueDepth enhancement.
 - Photo quality review before liveness.
 - Cross-platform liveness challenge.
 - Local quality checks and mock risk scoring.
@@ -87,12 +90,13 @@ This product is not a production KYC solution. It does not verify a government i
 | PRD-004 | The app must request microphone permission before recording video. | Must |
 | PRD-005 | The app must capture one front-camera face photo. | Must |
 | PRD-006 | The app must record one 5-second front-camera selfie video. | Must |
-| PRD-007 | The app must require photo quality confirmation before liveness. | Must |
+| PRD-007 | The app must require ML Kit photo analysis or explicit photo quality confirmation before liveness. | Must |
 | PRD-008 | The app must allow retake when the face is not in frame, unclear, or obstructed. | Must |
 | PRD-009 | The app must run local quality checks on captured artifacts. | Must |
 | PRD-010 | The app must calculate a deterministic mock risk score. | Must |
 | PRD-011 | The app must show pass, retry, or manual review. | Must |
 | PRD-012 | The app must provide a clear retry path. | Must |
+| PRD-013 | iOS must offer ML Kit and TrueDepth routes, with TrueDepth clearly labeled as pending native enhancement until implemented. | Should |
 
 ## 8. Permissions and Privacy
 

@@ -5,6 +5,7 @@ import type {
   KycSession,
   KycState,
   KycStep,
+  KycVerificationRoute,
   LivenessSignal,
   PermissionSignals,
   QualitySignals,
@@ -17,7 +18,7 @@ export type KycAction =
   | { type: 'BACK_TO_HOME' }
   | { type: 'ACCEPT_CONSENT' }
   | { type: 'SET_PERMISSIONS'; payload: PermissionSignals }
-  | { type: 'GO_TO_CAMERA' }
+  | { type: 'SELECT_VERIFICATION_ROUTE'; payload: KycVerificationRoute }
   | { type: 'SET_BUSY'; payload: boolean }
   | { type: 'SET_ERROR'; payload?: string }
   | { type: 'CAPTURE_COMPLETE'; payload: CaptureArtifacts }
@@ -61,11 +62,19 @@ export function kycReducer(state: KycState, action: KycAction): KycState {
           ...state.session,
           permissions: action.payload,
         },
-        step: action.payload.cameraGranted && action.payload.microphoneGranted ? 'camera' : 'permissions',
+        step: action.payload.cameraGranted && action.payload.microphoneGranted ? 'routeSelection' : 'permissions',
         error: action.payload.cameraGranted && action.payload.microphoneGranted ? undefined : state.error,
       };
-    case 'GO_TO_CAMERA':
-      return setStep(state, 'camera');
+    case 'SELECT_VERIFICATION_ROUTE':
+      return {
+        ...state,
+        session: mergeSession(state.session, {
+          verificationRoute: action.payload,
+        }),
+        step: 'camera',
+        isBusy: false,
+        error: undefined,
+      };
     case 'SET_BUSY':
       return {
         ...state,
@@ -167,6 +176,7 @@ export function kycReducer(state: KycState, action: KycAction): KycState {
         session: {
           ...next,
           retryCount: state.session.retryCount + 1,
+          verificationRoute: state.session.verificationRoute,
           permissions: state.session.permissions,
         },
       };

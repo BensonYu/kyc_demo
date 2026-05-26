@@ -7,7 +7,7 @@ export const SELFIE_GUIDE_BOX: NormalizedFaceBox = {
   height: 0.58,
 };
 
-const PASSING_PROVIDERS: FaceQualityResult['provider'][] = ['android_mlkit', 'vision_camera', 'ios_truedepth'];
+const PASSING_PROVIDERS: FaceQualityResult['provider'][] = ['android_mlkit', 'ios_mlkit', 'vision_camera'];
 const MIN_FACE_AREA_RATIO = 0.12;
 const MAX_FACE_AREA_RATIO = 0.62;
 const MAX_HEAD_YAW = 22;
@@ -68,4 +68,3 @@ function isHeadPoseAcceptable(headYaw?: number, headRoll?: number): boolean {
     (headRoll === undefined || Math.abs(headRoll) <= MAX_HEAD_ROLL)
   );
 }
-

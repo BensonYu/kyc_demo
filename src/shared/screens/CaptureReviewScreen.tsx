@@ -5,7 +5,7 @@ import { Page } from '../components/Page';
 import { PrimaryButton } from '../components/PrimaryButton';
 import { Section } from '../components/Section';
 import { BodyText, CheckRow, Eyebrow, Pill, Title } from '../components/TextBlocks';
-import { getQualitySignals, isCaptureAnalysisPassing } from '../services/faceQuality';
+import { getQualitySignals, isCaptureAnalysisPassing, isNativeAnalysisAvailable } from '../services/faceQuality';
 import { colors, radii, spacing } from '../theme';
 import type { CaptureArtifacts, FaceQualityResult, QualitySignals } from '../types/kyc';
 
@@ -27,7 +27,7 @@ const APPROVED_QUALITY: QualitySignals = {
 };
 
 export function CaptureReviewScreen({ capture, analysis, isAnalyzing, onApprove, onRetake }: CaptureReviewScreenProps) {
-  const nativeAnalysisReady = Boolean(analysis && analysis.provider !== 'manual_review');
+  const nativeAnalysisReady = isNativeAnalysisAvailable(analysis);
   const nativeAnalysisPassed = isCaptureAnalysisPassing(analysis);
   const isNativeBlockingFailure = Boolean(nativeAnalysisReady && !nativeAnalysisPassed);
   const reviewTitle = isAnalyzing
@@ -38,9 +38,9 @@ export function CaptureReviewScreen({ capture, analysis, isAnalyzing, onApprove,
         ? '自拍照需要重拍'
         : '确认人脸在框内且清晰';
   const reviewBody = isAnalyzing
-    ? 'Android 设备会优先使用本地 ML Kit 检查单人脸和取景框位置；不可用时会切换为人工确认 Demo。'
+    ? 'Android 和 iOS development build 会优先使用本地 ML Kit 检查单人脸和取景框位置；不可用时会切换为人工确认 Demo。'
     : nativeAnalysisPassed
-      ? '本地 Android ML Kit 已检测到单个人脸，并确认人脸在框内。请继续动作活体。'
+      ? '本地 ML Kit 已检测到单个人脸，并确认人脸在框内。请继续动作活体。'
       : isNativeBlockingFailure
         ? '当前照片未通过本地人脸位置检查，不能进入活体流程。请按提示重新拍摄。'
         : '当前环境没有可用的原生自动分析，请根据照片确认质量，不合格必须重新拍摄。';
@@ -69,7 +69,7 @@ export function CaptureReviewScreen({ capture, analysis, isAnalyzing, onApprove,
         <Title>{reviewTitle}</Title>
         <BodyText>{reviewBody}</BodyText>
         {isAnalyzing ? <Pill label="本地照片分析中" tone="neutral" /> : null}
-        {nativeAnalysisPassed ? <Pill label="Android ML Kit 自动检查通过" tone="success" /> : null}
+        {nativeAnalysisPassed ? <Pill label={analysis?.provider === 'ios_mlkit' ? 'iOS ML Kit 自动检查通过' : 'ML Kit 自动检查通过'} tone="success" /> : null}
         {isNativeBlockingFailure ? <Pill label="自动检查未通过" tone="danger" /> : null}
         {!isAnalyzing && !nativeAnalysisReady ? <Pill label="人工确认 Demo 信号" tone="warning" /> : null}
       </View>

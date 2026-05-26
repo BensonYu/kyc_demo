@@ -10,7 +10,7 @@ describe('kycReducer', () => {
     expect(state.session.id).toMatch(/^kyc-/);
   });
 
-  it('moves to camera when required permissions are granted', () => {
+  it('moves to route selection when required permissions are granted', () => {
     const state = kycReducer(createInitialState(), {
       type: 'SET_PERMISSIONS',
       payload: {
@@ -19,8 +19,18 @@ describe('kycReducer', () => {
       },
     });
 
-    expect(state.step).toBe('camera');
+    expect(state.step).toBe('routeSelection');
     expect(state.session.permissions.cameraGranted).toBe(true);
+  });
+
+  it('selects a verification route before camera capture', () => {
+    const state = kycReducer(createInitialState(), {
+      type: 'SELECT_VERIFICATION_ROUTE',
+      payload: 'ios_mlkit',
+    });
+
+    expect(state.step).toBe('camera');
+    expect(state.session.verificationRoute).toBe('ios_mlkit');
   });
 
   it('moves to capture review after capture completes', () => {
@@ -110,6 +120,7 @@ describe('kycReducer', () => {
     expect(retried.step).toBe('camera');
     expect(retried.session.retryCount).toBe(1);
     expect(retried.session.permissions.cameraGranted).toBe(true);
+    expect(retried.session.verificationRoute).toBe('manual_fallback');
   });
 
   it('resets to idle', () => {

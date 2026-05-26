@@ -32,13 +32,13 @@ The scoring engine produces three possible decisions:
 | `blurOk` | boolean | Face is not too blurry. |
 | `occlusionOk` | boolean | No major occlusion such as mask, hand, or sunglasses. |
 
-### Android ML Kit Post-Capture Signals
+### ML Kit Post-Capture Signals
 
-These signals are produced by the local Android Expo Module when available:
+These signals are produced by the local Expo Module when Android or iOS ML Kit is available:
 
 | Signal | Type | Description |
 | --- | --- | --- |
-| `provider` | enum | `android_mlkit` when the native module completed analysis. |
+| `provider` | enum | `android_mlkit` or `ios_mlkit` when the native module completed analysis. |
 | `faceCount` | number | Number of faces detected in the captured still photo. |
 | `faceBox` | object | Normalized detected face rectangle in image coordinates. |
 | `imageSize` | object | Width and height of the analyzed image. |
@@ -50,7 +50,7 @@ These signals are produced by the local Android Expo Module when available:
 | `confidence` | number | Demo confidence for this capture-quality check. |
 | `reasons` | string[] | Human-readable analysis notes. |
 
-Android ML Kit post-capture rules:
+ML Kit post-capture rules:
 
 - If `faceCount === 0`, block and require retake.
 - If `faceCount > 1`, block and require retake.
@@ -60,7 +60,16 @@ Android ML Kit post-capture rules:
 - If `abs(headYaw) > 22` or `abs(headRoll) > 18`, block and ask the user to face the camera.
 - If eye-open probabilities are unavailable but other checks pass, do not block; note lower confidence for later action liveness.
 
-Unsupported native analysis is neutral and falls back to manual review; it must not silently pass.
+Unsupported native analysis is neutral and falls back to manual review; it must not silently pass. ML Kit is used as a local vision primitive only, not a third-party KYC decision engine.
+
+### Verification Routes
+
+| Route | Platform | Behavior |
+| --- | --- | --- |
+| `android_mlkit` | Android | Uses the Android ML Kit post-capture analyzer when the local module is available. |
+| `ios_mlkit` | iOS | Uses the iOS ML Kit post-capture analyzer when the local module is available. |
+| `ios_truedepth` | iOS | Current milestone only marks the TrueDepth route and uses manual photo confirmation fallback. It must not add TrueDepth scoring credit until native depth/face-tracking signals exist. |
+| `manual_fallback` | Unsupported/Expo Go | Uses explicit manual photo confirmation and contributes no automatic face-analysis pass. |
 
 ### Liveness Signals
 
@@ -95,7 +104,7 @@ Return `retry` immediately if any blocking condition is true:
 - `cameraInterrupted` is true.
 - `faceDetected` is false.
 - `singleFace` is false.
-- Android ML Kit reports face outside the guide frame, face too small/large, or excessive pose angle.
+- ML Kit reports face outside the guide frame, face too small/large, or excessive pose angle.
 - `challengeCompleted` is false.
 - `challengeTimeout` is true.
 

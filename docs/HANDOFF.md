@@ -3,27 +3,32 @@
 ## Current State
 
 - The app is an Expo SDK 56 React Native MVP with no backend.
-- The flow is: consent -> permissions -> camera capture -> post-capture photo analysis/manual fallback -> liveness challenge -> local scoring -> result.
+- The flow is: consent -> permissions -> iOS route selection when applicable -> camera capture -> post-capture photo analysis/manual fallback -> liveness challenge -> local scoring -> result.
 - Face ID, Touch ID, and Android device biometrics have been removed from the KYC flow. They must not be used as KYC, liveness, or identity signals.
-- Expo Camera does not provide reliable face-in-frame detection in this project. Android now has a local ML Kit post-capture analyzer; unsupported environments use a photo review screen as an explicit fallback quality gate.
+- Expo Camera does not provide reliable face-in-frame detection in this project. Android and iOS now share a local ML Kit post-capture analyzer API; unsupported environments use a photo review screen as an explicit fallback quality gate.
 
-## Implemented Android Post-Capture Analyzer
+## Implemented ML Kit Post-Capture Analyzer
 
-First Android milestone is now in place:
+Android and iOS post-capture milestones are now in place:
 
 - Local Expo Module: `modules/kyc-face-analyzer`.
-- Native dependency: `com.google.mlkit:face-detection:16.1.7`.
+- Android native dependency: `com.google.mlkit:face-detection:16.1.7`.
+- iOS native dependency: `GoogleMLKit/FaceDetection`.
 - JS provider: `src/platform/android/faceAnalyzer.ts`.
-- Shared quality helpers: `src/platform/faceQuality.ts`.
+- JS provider: `src/platform/ios/faceAnalyzer.ts`.
+- Shared quality helpers: `src/shared/services/faceQuality.ts`.
 - Flow integration: `src/KycApp.tsx` analyzes the captured still photo before liveness.
 
 Behavior:
 
 - Android development builds call ML Kit after photo/video capture.
+- iOS users choose between the `ios_mlkit` route and the `ios_truedepth` route after permissions.
+- The `ios_mlkit` route calls the same JS API backed by Swift and `GoogleMLKit/FaceDetection`.
+- The `ios_truedepth` route is currently a route/provider stub and falls back to manual photo confirmation without adding TrueDepth scoring credit.
 - Passing captures auto-advance to action liveness.
 - No face, multiple faces, face outside the guide frame, face too small/large, or excessive pose angle blocks the flow and requires retake.
 - If the native module is missing or throws, the app falls back to manual photo review.
-- Expo Go cannot load this module; use `npx expo run:android` or EAS development build for validation.
+- Expo Go cannot load this module; use `npx expo run:android`, `npx expo run:ios`, or EAS development builds for validation.
 
 Current limitations:
 
@@ -51,9 +56,10 @@ Do not add third-party KYC SDKs or hosted KYC providers. Platform-native APIs an
 
 ## Platform Routes
 
-The project should branch by phone OS at the capability layer:
+The project branches by phone OS and selected capability route:
 
-- iOS route: use TrueDepth/ARKit/AVFoundation where available, with Vision/VisionCamera-style 2D face analysis as fallback on unsupported devices.
+- iOS ML Kit route: use local ML Kit post-capture analysis now, then Vision/VisionCamera-style real-time 2D face analysis later if needed.
+- iOS TrueDepth route: current stub only; future implementation should use TrueDepth/ARKit/AVFoundation where available, with ML Kit/Vision-style 2D face analysis as fallback on unsupported devices.
 - Android route: use ML Kit/VisionCamera frame processing for 2D face box, landmarks, pose, blink/open-mouth/head-turn validation, and quality gates.
 
 Do not duplicate the whole KYC flow per platform. Keep screens, state machine, scoring, copy, and result handling in a shared layer, and isolate only the native capture-analysis providers.
@@ -94,7 +100,26 @@ Notes:
 
 Primary reference: [ML Kit Face Detection for Android](https://developers.google.com/ml-kit/vision/face-detection/android).
 
-### 2. VisionCamera Face Detector
+### 2. iOS Native ML Kit
+
+Use Google ML Kit Face Detection in the existing iOS side of `modules/kyc-face-analyzer`.
+
+Current milestone:
+
+- `modules/kyc-face-analyzer/ios/KycFaceAnalyzerModule.swift` reads the captured photo URI.
+- The Swift module uses accurate mode, landmarks, classification, and minimum face size.
+- It returns the same normalized result contract as Android: provider, platform route, face count, face box, image size, face area ratio, pose, eye-open probabilities, confidence, and reasons.
+- iOS ML Kit failures fall back to explicit manual photo confirmation rather than silently passing.
+
+Next milestone:
+
+- Compile and verify the Swift module with CocoaPods in an iOS development build.
+- Add real-image fixture tests where practical.
+- Use consecutive frame or video-derived signals for action liveness, not just post-capture still-photo analysis.
+
+Primary reference: [ML Kit Face Detection for iOS](https://developers.google.com/ml-kit/vision/face-detection/ios).
+
+### 3. VisionCamera Face Detector
 
 Use `react-native-vision-camera` when real-time face-in-frame UX becomes the priority.
 
@@ -123,9 +148,9 @@ Notes:
 
 Primary reference: [VisionCamera Frame Processors](https://visioncamera.margelo.com/docs/guides/frame-processors).
 
-### 3. iOS TrueDepth Enhancement
+### 4. iOS TrueDepth Enhancement
 
-Use an iOS Expo Module with ARKit or AVFoundation TrueDepth APIs when depth-based liveness is needed.
+Use an iOS Expo Module with ARKit or AVFoundation TrueDepth APIs when depth-based liveness is needed. The current milestone has only the route, state, provider contract, and unsupported fallback; it does not yet perform depth capture or AR face tracking.
 
 Recommended use:
 
@@ -168,7 +193,7 @@ export type NormalizedFaceBox = {
 };
 
 export type FaceQualityResult = {
-  provider: 'manual_review' | 'android_mlkit' | 'vision_camera' | 'ios_truedepth';
+  provider: 'manual_review' | 'android_mlkit' | 'ios_mlkit' | 'vision_camera' | 'ios_truedepth';
   platformRoute: 'ios' | 'android' | 'fallback';
   faceDetected: boolean;
   singleFace: boolean;
@@ -227,6 +252,7 @@ src/
     ios/
       faceAnalyzer.ts
       livenessAnalyzer.ts
+      trueDepthFaceAnalyzer.ts
       trueDepthProvider.ts
       cameraProvider.ts
     fallback/
@@ -245,6 +271,7 @@ Migration guidance:
 
 - `src/shared/screens/CameraCaptureScreen.tsx`: real-time gating or capture trigger behavior.
 - `src/shared/screens/CaptureReviewScreen.tsx`: replace or keep as fallback when native analysis is unavailable.
+- `src/shared/screens/RouteSelectionScreen.tsx`: iOS-only route selection between ML Kit and TrueDepth.
 - `src/shared/types/kyc.ts`: extend shared quality/session signal types.
 - `src/shared/services/scoring.ts`: score native quality signals without adding identity claims.
 - `src/platform/android/*`: replace Android fallback analyzers with ML Kit or VisionCamera frame signals.
@@ -257,8 +284,11 @@ Migration guidance:
 - Multiple faces cannot proceed.
 - No face cannot proceed.
 - Supported Android devices can validate a captured photo with ML Kit.
+- Supported iOS development builds can validate a captured photo with ML Kit.
+- iOS can select either the ML Kit route or the TrueDepth route.
 - Android action prompts can be verified through ML Kit/VisionCamera-derived signals.
 - Unsupported devices fall back to `CaptureReviewScreen`.
+- Current TrueDepth route falls back honestly and does not claim depth liveness.
 - TrueDepth-supported iPhones can provide silent/action liveness signals without blocking unsupported iPhones.
 - No UI copy says Face ID performs KYC, liveness, or identity verification.
 - No third-party KYC SDK/provider is introduced.

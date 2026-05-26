@@ -5,9 +5,9 @@ export type NormalizedFaceBox = {
   height: number;
 };
 
-export type AndroidMlKitFaceAnalysis = {
-  provider: 'android_mlkit';
-  platformRoute: 'android';
+export type MlKitFaceAnalysis = {
+  provider: 'android_mlkit' | 'ios_mlkit';
+  platformRoute: 'android' | 'ios';
   faceDetected: boolean;
   singleFace: boolean;
   faceCentered: boolean;
@@ -27,4 +27,14 @@ export type AndroidMlKitFaceAnalysis = {
   rightEyeOpenProbability?: number;
   confidence: number;
   reasons: string[];
+};
+
+export type AndroidMlKitFaceAnalysis = MlKitFaceAnalysis & {
+  provider: 'android_mlkit';
+  platformRoute: 'android';
+};
+
+export type IosMlKitFaceAnalysis = MlKitFaceAnalysis & {
+  provider: 'ios_mlkit';
+  platformRoute: 'ios';
 };

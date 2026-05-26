@@ -15,6 +15,7 @@
 | Home | Start the flow. | 开始 KYC |
 | Consent | Explain local capture and demo use. | 同意并继续 |
 | Permissions | Request camera and microphone access. | 授权 |
+| Route Selection | iOS user chooses ML Kit or TrueDepth enhancement route. | 选择路线 |
 | Camera Capture | Align face, capture photo, record video. | 开始拍摄 |
 | Capture Review | Run post-capture face analysis or manual fallback. | 继续动作活体 / 重新拍摄 |
 | Liveness Challenge | Complete action challenge. | 完成动作 |
@@ -64,9 +65,21 @@ Required system permissions:
 States:
 
 - Not requested: show why access is needed.
-- Granted: continue to camera.
+- Granted on iOS: continue to route selection.
+- Granted on Android or unsupported platforms: continue to the default route and camera.
 - Denied: explain how to enable access in Settings.
 - Limited/unavailable: show recovery copy.
+
+### Route Selection
+
+Shown only on iOS after camera and microphone permissions are granted.
+
+Options:
+
+- "ML Kit 人脸检测流程": use local iOS ML Kit post-capture analysis before action liveness.
+- "TrueDepth 增强流程": enter the same capture flow with the TrueDepth route selected. Current copy must state that native ARKit/AVFoundation depth liveness is still pending.
+
+Android skips this screen and defaults to Android ML Kit. Expo Go and unsupported environments use manual fallback.
 
 ### Camera Capture
 
@@ -85,7 +98,7 @@ Happy path:
 3. App starts 5-second video recording.
 4. Progress reaches 5 seconds.
 5. App stops recording and continues to photo review.
-6. Android development builds run local ML Kit face analysis before liveness. Unsupported environments show manual review.
+6. Android and iOS development builds run local ML Kit face analysis before liveness when that route is active. Unsupported environments show manual review.
 
 Recovery states:
 
@@ -100,8 +113,9 @@ Recovery states:
 Purpose:
 
 - Prevent the flow from accepting an obviously bad capture before liveness.
-- Use Android ML Kit post-capture analysis when available.
+- Use Android or iOS ML Kit post-capture analysis when available.
 - Fall back to explicit manual review when native analysis is unavailable.
+- Treat the current TrueDepth route as manual fallback until native ARKit/AVFoundation signals are implemented.
 
 Copy:
 
@@ -112,8 +126,8 @@ Copy:
 
 Outcomes:
 
-- Android ML Kit passes: continue to liveness automatically or through the continue CTA.
-- Android ML Kit blocks: require retake; no manual override.
+- ML Kit passes: continue to liveness automatically or through the continue CTA.
+- ML Kit blocks: require retake; no manual override.
 - Native analyzer unavailable: show manual confirmation fallback.
 - Not acceptable in manual fallback: return to camera capture.
 
@@ -211,12 +225,13 @@ Secondary action:
 | Microphone permission denied | Explain video recording needs microphone access; allow retry. |
 | Camera unavailable | Show device limitation and return home. |
 | Face outside frame in review | Ask user to retake. |
-| Android ML Kit reports no face | Require retake before liveness. |
-| Android ML Kit reports face too small/large or pose too high | Require retake with the analyzer reason. |
+| ML Kit reports no face | Require retake before liveness. |
+| ML Kit reports face too small/large or pose too high | Require retake with the analyzer reason. |
 | Video shorter than 5 seconds | Show retry with clear reason. |
 | Multiple faces detected | Ask user to retry alone in frame. |
 | App backgrounded during capture | Cancel current recording and ask user to retry. |
-| TrueDepth unavailable | Continue normal flow without mentioning technical failure. |
+| TrueDepth route selected in current milestone | Continue through manual photo confirmation and show honest pending-native-copy. |
+| TrueDepth unavailable after native implementation | Continue normal flow without mentioning technical failure. |
 
 ## 5. Copy Guidelines
 

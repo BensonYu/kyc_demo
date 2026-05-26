@@ -6,6 +6,8 @@ import type { FaceQualityResult } from '../types/kyc';
 describe('faceQuality helpers', () => {
   it('passes only native successful analysis', () => {
     expect(isCaptureAnalysisPassing(makeResult())).toBe(true);
+    expect(isCaptureAnalysisPassing(makeResult({ provider: 'ios_mlkit', platformRoute: 'ios' }))).toBe(true);
+    expect(isCaptureAnalysisPassing(makeResult({ provider: 'ios_truedepth', platformRoute: 'ios' }))).toBe(false);
     expect(isCaptureAnalysisPassing(makeResult({ provider: 'manual_review', confidence: 0 }))).toBe(false);
     expect(isCaptureAnalysisPassing(makeResult({ faceCentered: false }))).toBe(false);
     expect(isCaptureAnalysisPassing(makeResult({ faceAreaRatio: 0.05 }))).toBe(false);

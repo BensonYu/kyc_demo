@@ -1,6 +1,13 @@
-import type { CaptureArtifacts, FaceQualityResult, LivenessSignal, NormalizedFaceBox, TrueDepthSignals } from '../shared/types/kyc';
+import type {
+  CaptureArtifacts,
+  FaceQualityResult,
+  KycVerificationRoute,
+  LivenessSignal,
+  NormalizedFaceBox,
+  TrueDepthSignals,
+} from '../shared/types/kyc';
 
-export type { FaceQualityResult, NormalizedFaceBox };
+export type { FaceQualityResult, KycVerificationRoute, NormalizedFaceBox };
 
 export type FaceAnalyzer = {
   analyzeCapture(input: {

@@ -9,7 +9,7 @@ Core modules:
 - App shell and navigation.
 - Permission manager.
 - Camera capture module.
-- Post-capture face analyzer with manual review fallback.
+- Post-capture face analyzer with ML Kit on supported development builds and manual review fallback.
 - Liveness challenge module.
 - Local quality check module.
 - Mock scoring engine.
@@ -20,7 +20,7 @@ Recommended libraries:
 - React Native through Expo.
 - `expo-camera` for camera preview, still photo capture, and 5-second video recording.
 - `expo-file-system` for local session artifact handling.
-- Local Expo Module `modules/kyc-face-analyzer` for Android ML Kit post-capture face analysis.
+- Local Expo Module `modules/kyc-face-analyzer` for Android and iOS ML Kit post-capture face analysis.
 - Expo development build for future native modules beyond Expo Go.
 
 ## 2. Runtime Boundaries
@@ -45,6 +45,7 @@ Recommended states:
 | `idle` | User is on the home screen. |
 | `consent` | User is reviewing privacy and consent copy. |
 | `requestingPermissions` | App is requesting camera/microphone permissions. |
+| `routeSelection` | iOS user chooses the ML Kit route or the TrueDepth enhancement route. Android and unsupported platforms auto-select their default route. |
 | `cameraReady` | Camera preview is visible and ready. |
 | `capturingPhoto` | App is taking the face photo. |
 | `recordingVideo` | App is recording the 5-second selfie video. |
@@ -66,6 +67,7 @@ Session data should include:
 - Permission statuses.
 - Photo quality review result.
 - Native post-capture face analysis result, when available.
+- Verification route: `android_mlkit`, `ios_mlkit`, `ios_truedepth`, or `manual_fallback`.
 - Liveness challenge type and result.
 - Quality check signals.
 - Mock risk score.
@@ -91,7 +93,7 @@ Session data should include:
 
 ### Capture Quality Inputs
 
-The MVP now uses Android ML Kit for the first post-capture automatic gate when running in an Android development build. Expo Go, iOS, web, and unsupported devices fall back to explicit photo review.
+The MVP now uses ML Kit for the first post-capture automatic gate when running in supported Android or iOS development builds. Expo Go, web, and unsupported native environments fall back to explicit photo review.
 
 - Face present.
 - Single face.
@@ -101,9 +103,18 @@ The MVP now uses Android ML Kit for the first post-capture automatic gate when r
 - Video duration at least 5 seconds.
 - No obvious camera interruption.
 
-Android ML Kit currently verifies the captured still photo after capture and before action liveness. It returns normalized face box, face count, head yaw/roll, eye-open probabilities when available, confidence, and reasons. The shared flow blocks liveness and requires retake when Android ML Kit reports no face, multiple faces, face outside the guide frame, face too small/large, or excessive pose angle.
+ML Kit currently verifies the captured still photo after capture and before action liveness. It returns normalized face box, face count, head yaw/roll, eye-open probabilities when available, confidence, and reasons. The shared flow blocks liveness and requires retake when ML Kit reports no face, multiple faces, face outside the guide frame, face too small/large, or excessive pose angle.
 
 Manual review remains only a fallback for environments where native analysis is unavailable. Future implementations should replace fallback review with in-house frame analysis, platform-native face detection, and liveness checks rather than third-party KYC SDKs.
+
+### iOS Route Selection
+
+After permissions are granted, iOS shows a route selection screen:
+
+- `ios_mlkit`: uses the shared `modules/kyc-face-analyzer` JavaScript API backed by `GoogleMLKit/FaceDetection` in Swift.
+- `ios_truedepth`: enters the same capture flow but marks the session as the TrueDepth route. In this milestone, TrueDepth is a provider contract and unsupported fallback only; it does not perform depth liveness or add scoring credit.
+
+Android does not show this screen and defaults to `android_mlkit`. Web and unsupported environments default to `manual_fallback`.
 
 ## 5. Device Biometrics Boundary
 
@@ -143,7 +154,7 @@ The liveness module should return:
 
 ## 7. iOS TrueDepth Enhancement
 
-TrueDepth is an iOS-only enhancement, not an MVP blocker.
+TrueDepth is an iOS-only enhancement, not an MVP blocker. The current app includes the route, state, provider contract, and honest fallback copy, but does not yet implement ARKit or AVFoundation depth capture.
 
 Correct capability boundary:
 
@@ -169,6 +180,12 @@ Suggested native-derived signals:
 
 TrueDepth should improve confidence but must degrade gracefully on unsupported devices.
 
+Current status:
+
+- `src/platform/ios/trueDepthProvider.ts` returns unsupported fallback signals.
+- `src/platform/ios/trueDepthFaceAnalyzer.ts` falls back to manual photo confirmation.
+- The scoring engine treats unsupported TrueDepth as neutral and does not subtract risk points.
+
 ## 8. Android Fallback
 
 Android does not have a universal equivalent to iOS TrueDepth. The app should use:
@@ -190,6 +207,18 @@ modules/
 ```
 
 It uses Google ML Kit Face Detection `com.google.mlkit:face-detection:16.1.7`. Because it is a custom native module, it requires `npx expo run:android` or an EAS development build. Expo Go cannot load this analyzer and will use the manual review fallback.
+
+Current iOS native module:
+
+```text
+modules/
+  kyc-face-analyzer/
+    ios/
+      KycFaceAnalyzerModule.swift
+      KycFaceAnalyzer.podspec
+```
+
+It uses the `GoogleMLKit/FaceDetection` Pod. Because it is a custom native module, it requires `npx expo run:ios` or an EAS development build. Expo Go cannot load this analyzer and will use the manual review fallback.
 
 ## 9. Mock Scoring Engine
 
@@ -232,6 +261,7 @@ src/
     ios/
       faceAnalyzer.ts
       livenessAnalyzer.ts
+      trueDepthFaceAnalyzer.ts
       trueDepthProvider.ts
       cameraProvider.ts
     fallback/

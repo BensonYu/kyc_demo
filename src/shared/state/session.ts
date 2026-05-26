@@ -7,6 +7,7 @@ export function createInitialSession(): KycSession {
     id: `kyc-${Date.now()}`,
     createdAt: now,
     retryCount: 0,
+    verificationRoute: 'manual_fallback',
     permissions: {
       cameraGranted: false,
       microphoneGranted: false,

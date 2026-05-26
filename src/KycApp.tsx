@@ -1,9 +1,11 @@
 import { useCameraPermissions, useMicrophonePermissions } from 'expo-camera';
 import { useCallback, useEffect, useRef, useReducer } from 'react';
+import { Platform } from 'react-native';
 
 import { HomeScreen } from './shared/screens/HomeScreen';
 import { ConsentScreen } from './shared/screens/ConsentScreen';
 import { PermissionsScreen } from './shared/screens/PermissionsScreen';
+import { RouteSelectionScreen } from './shared/screens/RouteSelectionScreen';
 import { CameraCaptureScreen } from './shared/screens/CameraCaptureScreen';
 import { CaptureReviewScreen } from './shared/screens/CaptureReviewScreen';
 import { LivenessScreen } from './shared/screens/LivenessScreen';
@@ -12,6 +14,7 @@ import { ResultScreen } from './shared/screens/ResultScreen';
 import { createInitialState, kycReducer } from './shared/state/kycReducer';
 import { scoreKycSession } from './shared/services/scoring';
 import { getQualitySignals, isCaptureAnalysisPassing, SELFIE_GUIDE_BOX } from './shared/services/faceQuality';
+import { getDefaultVerificationRoute, shouldShowRouteSelection } from './shared/services/routes';
 import { getPlatformCapabilities } from './platform';
 import type { CaptureArtifacts, LivenessSignal, PermissionSignals, QualitySignals } from './shared/types/kyc';
 
@@ -21,6 +24,16 @@ export function KycApp() {
   const [, requestMicrophonePermission, getMicrophonePermission] = useMicrophonePermissions();
   const processingSessionIdRef = useRef<string | undefined>(undefined);
   const captureAnalysisUriRef = useRef<string | undefined>(undefined);
+
+  const selectDefaultRoute = useCallback(() => {
+    dispatch({ type: 'SELECT_VERIFICATION_ROUTE', payload: getDefaultVerificationRoute(Platform.OS) });
+  }, []);
+
+  useEffect(() => {
+    if (state.step === 'routeSelection' && !shouldShowRouteSelection(Platform.OS)) {
+      selectDefaultRoute();
+    }
+  }, [selectDefaultRoute, state.step]);
 
   const syncPermissions = useCallback(async () => {
     dispatch({ type: 'SET_BUSY', payload: true });
@@ -75,7 +88,7 @@ export function KycApp() {
 
     const process = async () => {
       dispatch({ type: 'SET_BUSY', payload: true });
-      const capabilities = getPlatformCapabilities();
+      const capabilities = getPlatformCapabilities(state.session.verificationRoute);
       const trueDepth = await capabilities.trueDepth.getSignals();
 
       if (canceled) {
@@ -103,7 +116,7 @@ export function KycApp() {
     return () => {
       canceled = true;
     };
-  }, [state.step, state.session.id]);
+  }, [state.step, state.session.id, state.session.verificationRoute]);
 
   useEffect(() => {
     if (state.step !== 'captureReview') {
@@ -121,7 +134,7 @@ export function KycApp() {
 
     const analyzeCapture = async () => {
       dispatch({ type: 'SET_BUSY', payload: true });
-      const capabilities = getPlatformCapabilities();
+      const capabilities = getPlatformCapabilities(state.session.verificationRoute);
       const result = await capabilities.face.analyzeCapture({
         capture,
         guideBox: SELFIE_GUIDE_BOX,
@@ -147,7 +160,7 @@ export function KycApp() {
     return () => {
       canceled = true;
     };
-  }, [state.step, state.session.capture.photoUri]);
+  }, [state.step, state.session.capture.photoUri, state.session.verificationRoute]);
 
   const handleCaptureComplete = (capture: CaptureArtifacts) => {
     dispatch({ type: 'CAPTURE_COMPLETE', payload: capture });
@@ -183,11 +196,29 @@ export function KycApp() {
         onRequest={requestPermissions}
         onContinue={() => {
           if (state.session.permissions.cameraGranted && state.session.permissions.microphoneGranted) {
-            dispatch({ type: 'GO_TO_CAMERA' });
+            if (shouldShowRouteSelection(Platform.OS)) {
+              dispatch({ type: 'GO_TO_STEP', payload: 'routeSelection' });
+            } else {
+              selectDefaultRoute();
+            }
           } else {
             syncPermissions();
           }
         }}
+      />
+    );
+  }
+
+  if (state.step === 'routeSelection') {
+    if (!shouldShowRouteSelection(Platform.OS)) {
+      return <ProcessingScreen />;
+    }
+
+    return (
+      <RouteSelectionScreen
+        selectedRoute={state.session.verificationRoute}
+        onSelectRoute={(route) => dispatch({ type: 'SELECT_VERIFICATION_ROUTE', payload: route })}
+        onBack={() => dispatch({ type: 'GO_TO_STEP', payload: 'permissions' })}
       />
     );
   }

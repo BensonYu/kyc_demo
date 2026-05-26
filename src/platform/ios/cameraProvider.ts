@@ -1,5 +1,4 @@
 export const iosCameraProvider = {
-  preferredImplementation: 'expo-camera',
-  futureImplementation: 'vision-camera-or-truedepth-native-module',
+  preferredImplementation: 'vision-camera',
+  futureImplementation: 'vision-camera-frame-output-or-truedepth-native-module',
 } as const;
-

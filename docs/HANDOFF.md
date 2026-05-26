@@ -5,7 +5,7 @@
 - The app is an Expo SDK 56 React Native MVP with no backend.
 - The flow is: consent -> permissions -> iOS route selection when applicable -> camera capture -> post-capture photo analysis/manual fallback -> liveness challenge -> local scoring -> result.
 - Face ID, Touch ID, and Android device biometrics have been removed from the KYC flow. They must not be used as KYC, liveness, or identity signals.
-- Expo Camera does not provide reliable face-in-frame detection in this project. Android and iOS now share a local ML Kit post-capture analyzer API; unsupported environments use a photo review screen as an explicit fallback quality gate.
+- VisionCamera V5 now provides the shared camera preview, photo output, and 5-second video output. Android and iOS share a local ML Kit post-capture analyzer API; unsupported environments use a photo review screen as an explicit fallback quality gate.
 
 ## Implemented ML Kit Post-Capture Analyzer
 
@@ -33,7 +33,7 @@ Behavior:
 Current limitations:
 
 - Brightness, blur, and occlusion are still basic placeholders in the native result.
-- Face box coordinates are normalized from the captured image and drawn over the review image; real-time camera gating is still future VisionCamera work.
+- Face box coordinates are normalized from the captured image and drawn over the review image; real-time frame output gating is still future VisionCamera work.
 - This is face presence/quality analysis, not identity verification or production-grade anti-spoofing.
 
 ## Goal for Next Phase
@@ -95,7 +95,7 @@ Notes:
 
 - ML Kit can detect faces and face landmarks/contours/classification signals, but it is not depth-based liveness.
 - Silent liveness on Android should rely on frame continuity, pose/motion consistency, texture/quality heuristics, and action challenge validation rather than TrueDepth.
-- Real-time pre-capture gating requires camera frame access; with the current Expo Camera stack, post-capture analysis is the lower-risk first step.
+- Real-time pre-capture gating requires VisionCamera frame output; the current milestone still uses post-capture analysis as the lower-risk first step.
 - A native module requires an Expo development build, not Expo Go.
 
 Primary reference: [ML Kit Face Detection for Android](https://developers.google.com/ml-kit/vision/face-detection/android).
@@ -123,10 +123,15 @@ Primary reference: [ML Kit Face Detection for iOS](https://developers.google.com
 
 Use `react-native-vision-camera` when real-time face-in-frame UX becomes the priority.
 
+Current status:
+
+- `CameraCaptureScreen` already uses VisionCamera V5 for preview, still photo capture, and 5-second video recording.
+- The current capture milestone attaches photo and video outputs to the same camera session, starts a `maxDuration: 5` recorder, then captures the still photo while recording.
+- The app still uses ML Kit post-capture analysis after the captured still photo.
+
 Recommended use:
 
-- Replace `expo-camera` in `CameraCaptureScreen`.
-- Use a Frame Processor plugin, either a maintained face detector plugin or a custom native plugin wrapping ML Kit on Android and Vision/AVFoundation on iOS.
+- Add a Frame Output / frame-processing plugin, either a maintained face detector plugin or a custom native plugin wrapping ML Kit on Android and Vision/AVFoundation on iOS.
 - Draw the guide box and face box from real-time normalized frame coordinates.
 - Disable the capture button until the last N frames satisfy the quality gate.
 - Verify action prompts from consecutive frame signals rather than user self-confirmation.

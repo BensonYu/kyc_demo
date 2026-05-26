@@ -1,5 +1,4 @@
 export const androidCameraProvider = {
-  preferredImplementation: 'expo-camera',
-  futureImplementation: 'vision-camera',
+  preferredImplementation: 'vision-camera',
+  futureImplementation: 'vision-camera-frame-output',
 } as const;
-

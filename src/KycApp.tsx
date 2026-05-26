@@ -1,6 +1,6 @@
-import { useCameraPermissions, useMicrophonePermissions } from 'expo-camera';
 import { useCallback, useEffect, useRef, useReducer } from 'react';
 import { Platform } from 'react-native';
+import { useCameraPermission, useMicrophonePermission } from 'react-native-vision-camera';
 
 import { HomeScreen } from './shared/screens/HomeScreen';
 import { ConsentScreen } from './shared/screens/ConsentScreen';
@@ -30,8 +30,8 @@ import type { CaptureArtifacts, LivenessSignal, PermissionSignals, QualitySignal
 
 export function KycApp() {
   const [state, dispatch] = useReducer(kycReducer, undefined, createInitialState);
-  const [, requestCameraPermission, getCameraPermission] = useCameraPermissions();
-  const [, requestMicrophonePermission, getMicrophonePermission] = useMicrophonePermissions();
+  const cameraPermission = useCameraPermission();
+  const microphonePermission = useMicrophonePermission();
   const processingSessionIdRef = useRef<string | undefined>(undefined);
   const captureAnalysisUriRef = useRef<string | undefined>(undefined);
   const preferencesRef = useRef<KycLocalPreferences | undefined>(undefined);
@@ -47,13 +47,11 @@ export function KycApp() {
   }, [selectDefaultRoute, state.step]);
 
   const readSystemPermissions = useCallback(async (): Promise<PermissionSignals> => {
-    const [camera, microphone] = await Promise.all([getCameraPermission(), getMicrophonePermission()]);
-
     return {
-      cameraGranted: camera.granted,
-      microphoneGranted: microphone.granted,
+      cameraGranted: cameraPermission.hasPermission,
+      microphoneGranted: microphonePermission.hasPermission,
     };
-  }, [getCameraPermission, getMicrophonePermission]);
+  }, [cameraPermission.hasPermission, microphonePermission.hasPermission]);
 
   const persistPermissions = useCallback(async (permissions: PermissionSignals) => {
     preferencesRef.current = await updateStoredPermissions(permissions, preferencesRef.current);
@@ -102,10 +100,13 @@ export function KycApp() {
   const requestPermissions = useCallback(async () => {
     dispatch({ type: 'SET_BUSY', payload: true });
     try {
-      const [camera, microphone] = await Promise.all([requestCameraPermission(), requestMicrophonePermission()]);
+      const [cameraGranted, microphoneGranted] = await Promise.all([
+        cameraPermission.hasPermission ? true : cameraPermission.requestPermission(),
+        microphonePermission.hasPermission ? true : microphonePermission.requestPermission(),
+      ]);
       const permissions: PermissionSignals = {
-        cameraGranted: camera.granted,
-        microphoneGranted: microphone.granted,
+        cameraGranted,
+        microphoneGranted,
       };
       dispatch({
         type: 'SET_PERMISSIONS',
@@ -120,7 +121,7 @@ export function KycApp() {
     } catch (error) {
       dispatch({ type: 'SET_ERROR', payload: error instanceof Error ? error.message : '请求权限失败。' });
     }
-  }, [persistPermissions, requestCameraPermission, requestMicrophonePermission]);
+  }, [cameraPermission, microphonePermission, persistPermissions]);
 
   const handleStart = useCallback(async () => {
     dispatch({ type: 'SET_BUSY', payload: true });

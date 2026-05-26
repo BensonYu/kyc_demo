@@ -1,12 +1,25 @@
-import { CameraView } from 'expo-camera';
-import type { CameraMode } from 'expo-camera';
 import { Camera, RefreshCw } from 'lucide-react-native';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import {
+  Camera as VisionCamera,
+  CommonResolutions,
+  useCameraDevice,
+  usePhotoOutput,
+  useVideoOutput,
+  type CameraOutput,
+  type Recorder,
+  type RecordingFinishedReason,
+} from 'react-native-vision-camera';
 
 import { PrimaryButton } from '../components/PrimaryButton';
 import { copyArtifactToSession } from '../services/artifacts';
+import {
+  assertCompleteVisionCameraCapture,
+  createVisionCameraCaptureArtifacts,
+  VISION_CAMERA_RECORDING_SECONDS,
+} from '../services/visionCameraCapture';
 import { colors, radii, spacing } from '../theme';
 import type { CaptureArtifacts } from '../types/kyc';
 
@@ -18,23 +31,50 @@ type CameraCaptureScreenProps = {
 };
 
 type CapturePhase = 'ready' | 'photo' | 'video' | 'saving' | 'error';
-
-const RECORDING_SECONDS = 5;
+type RecordingSession = {
+  started: Promise<void>;
+  finished: Promise<string>;
+};
+type RecordingResolver = {
+  resolve: (filePath: string) => void;
+  reject: (error: Error) => void;
+};
 
 export function CameraCaptureScreen({ sessionId, onCaptureComplete, onError, onCancel }: CameraCaptureScreenProps) {
-  const cameraRef = useRef<CameraView | null>(null);
   const intervalRef = useRef<ReturnType<typeof setInterval> | undefined>(undefined);
   const startedAtRef = useRef<number | undefined>(undefined);
+  const recorderRef = useRef<Recorder | undefined>(undefined);
+  const captureRunIdRef = useRef(0);
+  const cameraInterruptedRef = useRef(false);
+  const device = useCameraDevice('front');
+  const photoOutput = usePhotoOutput({
+    targetResolution: CommonResolutions.FHD_4_3,
+    containerFormat: 'jpeg',
+    quality: 0.82,
+    qualityPrioritization: 'balanced',
+  });
+  const videoOutput = useVideoOutput({
+    targetResolution: CommonResolutions.FHD_16_9,
+    enableAudio: true,
+    fileType: 'mp4',
+  });
+  const cameraOutputs = useMemo<CameraOutput[]>(() => [photoOutput, videoOutput], [photoOutput, videoOutput]);
   const [phase, setPhase] = useState<CapturePhase>('ready');
-  const [cameraMode, setCameraMode] = useState<CameraMode>('picture');
+  const [isConfigured, setIsConfigured] = useState(false);
   const [progress, setProgress] = useState(0);
   const [localError, setLocalError] = useState<string>();
 
   const isBusy = phase === 'photo' || phase === 'video' || phase === 'saving';
+  const isPreparingCamera = !device || !isConfigured;
+  const canCapture = Boolean(device && isConfigured && !isBusy);
 
   const progressLabel = useMemo(() => {
     if (phase === 'ready') {
-      return '将脸部放入框内，点击后会采集自拍照和 5 秒自拍视频';
+      if (!device) {
+        return '正在查找前置摄像头；如长时间停留，请检查设备';
+      }
+
+      return isConfigured ? '将脸部放入框内，点击后会采集自拍照和 5 秒自拍视频' : '正在准备前置摄像头';
     }
 
     if (phase === 'photo') {
@@ -42,7 +82,7 @@ export function CameraCaptureScreen({ sessionId, onCaptureComplete, onError, onC
     }
 
     if (phase === 'video') {
-      return `正在采集照片和 5 秒自拍视频 ${Math.min(RECORDING_SECONDS, Math.ceil(progress))}/${RECORDING_SECONDS}s`;
+      return `正在采集照片和 5 秒自拍视频 ${Math.min(VISION_CAMERA_RECORDING_SECONDS, Math.ceil(progress))}/${VISION_CAMERA_RECORDING_SECONDS}s`;
     }
 
     if (phase === 'saving') {
@@ -50,43 +90,40 @@ export function CameraCaptureScreen({ sessionId, onCaptureComplete, onError, onC
     }
 
     return localError ?? '拍摄失败，请重试';
-  }, [localError, phase, progress]);
+  }, [device, isConfigured, localError, phase, progress]);
 
   useEffect(() => {
     return () => {
       if (intervalRef.current) {
         clearInterval(intervalRef.current);
       }
-      try {
-        cameraRef.current?.stopRecording();
-      } catch {
-        // The native camera may already be stopped when the screen unmounts.
-      }
+      recorderRef.current?.cancelRecording().catch(() => undefined);
     };
   }, []);
 
   const startCapture = async () => {
-    if (!cameraRef.current || isBusy) {
+    if (!canCapture) {
       return;
     }
 
+    const captureRunId = captureRunIdRef.current + 1;
+    captureRunIdRef.current = captureRunId;
+    recorderRef.current = undefined;
+    startedAtRef.current = undefined;
     setLocalError(undefined);
     setProgress(0);
-    setCameraMode('picture');
     setPhase('photo');
+    let recording: RecordingSession | undefined;
 
     try {
-      await waitForCameraModeSwitch();
-
-      const photo = await cameraRef.current.takePictureAsync({
-        quality: 0.82,
-        skipProcessing: false,
+      const recorder = await videoOutput.createRecorder({
+        maxDuration: VISION_CAMERA_RECORDING_SECONDS,
       });
+      recorderRef.current = recorder;
 
-      setCameraMode('video');
-      setPhase('video');
-      await waitForCameraModeSwitch();
-
+      recording = startRecording(recorder);
+      recording.finished.catch(() => undefined);
+      await recording.started;
       startedAtRef.current = Date.now();
       intervalRef.current = setInterval(() => {
         if (!startedAtRef.current) {
@@ -96,39 +133,50 @@ export function CameraCaptureScreen({ sessionId, onCaptureComplete, onError, onC
         setProgress((Date.now() - startedAtRef.current) / 1000);
       }, 160);
 
-      const video = await cameraRef.current.recordAsync({
-        maxDuration: RECORDING_SECONDS,
-      });
+      await waitForRecordingWarmup();
+      setPhase('video');
 
-      if (!video?.uri) {
-        throw new Error('自拍视频未成功保存，请重新录制。');
-      }
+      const photo = await photoOutput.capturePhotoToFile(
+        {
+          flashMode: 'off',
+          enableShutterSound: false,
+        },
+        {},
+      );
 
-      if (intervalRef.current) {
-        clearInterval(intervalRef.current);
-        intervalRef.current = undefined;
-      }
-
-      const measuredDuration = startedAtRef.current ? (Date.now() - startedAtRef.current) / 1000 : RECORDING_SECONDS;
-      setProgress(RECORDING_SECONDS);
+      const videoPath = await recording.finished;
+      const finishedAt = Date.now();
+      recorderRef.current = undefined;
+      clearProgressTimer(intervalRef);
+      setProgress(VISION_CAMERA_RECORDING_SECONDS);
       setPhase('saving');
 
+      const capture = createVisionCameraCaptureArtifacts({
+        photoPath: photo.filePath,
+        videoPath,
+        startedAt: startedAtRef.current ?? finishedAt - VISION_CAMERA_RECORDING_SECONDS * 1000,
+        finishedAt,
+        cameraInterrupted: cameraInterruptedRef.current,
+      });
+      assertCompleteVisionCameraCapture(capture);
+
       const [photoUri, videoUri] = await Promise.all([
-        copyArtifactToSession(photo.uri, sessionId, 'selfie-photo.jpg'),
-        copyArtifactToSession(video.uri, sessionId, 'selfie-video.mov'),
+        copyArtifactToSession(capture.photoUri, sessionId, 'selfie-photo.jpg'),
+        copyArtifactToSession(capture.videoUri, sessionId, 'selfie-video.mp4'),
       ]);
 
       onCaptureComplete({
         photoUri,
         videoUri,
-        videoDurationSeconds: Math.max(RECORDING_SECONDS, Math.round(measuredDuration * 10) / 10),
-        cameraInterrupted: false,
+        videoDurationSeconds: capture.videoDurationSeconds,
+        cameraInterrupted: capture.cameraInterrupted,
       });
     } catch (error) {
-      if (intervalRef.current) {
-        clearInterval(intervalRef.current);
-        intervalRef.current = undefined;
+      if (captureRunIdRef.current === captureRunId) {
+        recorderRef.current?.cancelRecording().catch(() => undefined);
+        recorderRef.current = undefined;
       }
+      clearProgressTimer(intervalRef);
       const message = normalizeCaptureError(error);
       setPhase('error');
       setLocalError(message);
@@ -138,7 +186,32 @@ export function CameraCaptureScreen({ sessionId, onCaptureComplete, onError, onC
 
   return (
     <View style={styles.container}>
-      <CameraView ref={cameraRef} style={styles.camera} facing="front" mode={cameraMode} active />
+      {device ? (
+        <VisionCamera
+          style={styles.camera}
+          device={device}
+          outputs={cameraOutputs}
+          constraints={[{ resolutionBias: videoOutput }, { resolutionBias: photoOutput }]}
+          isActive
+          resizeMode="cover"
+          mirrorMode="auto"
+          onConfigured={() => {
+            setIsConfigured(true);
+            cameraInterruptedRef.current = false;
+          }}
+          onError={(error) => {
+            recorderRef.current?.cancelRecording().catch(() => undefined);
+            const message = normalizeCaptureError(error);
+            setPhase('error');
+            setLocalError(message);
+            onError(message);
+          }}
+          onInterruptionStarted={() => {
+            cameraInterruptedRef.current = true;
+            recorderRef.current?.cancelRecording().catch(() => undefined);
+          }}
+        />
+      ) : null}
       <SafeAreaView pointerEvents="box-none" style={styles.overlay}>
         <View style={styles.topBar}>
           <Text style={styles.topTitle}>自拍采集</Text>
@@ -156,10 +229,10 @@ export function CameraCaptureScreen({ sessionId, onCaptureComplete, onError, onC
           {localError ? <Text style={styles.errorText}>{localError}</Text> : null}
           {phase === 'photo' || phase === 'video' ? (
             <View style={styles.progressTrack}>
-              <View style={[styles.progressFill, { width: `${Math.min(100, (progress / RECORDING_SECONDS) * 100)}%` }]} />
+              <View style={[styles.progressFill, { width: `${Math.min(100, (progress / VISION_CAMERA_RECORDING_SECONDS) * 100)}%` }]} />
             </View>
           ) : null}
-          {isBusy ? <ActivityIndicator color={colors.white} /> : null}
+          {isBusy || isPreparingCamera ? <ActivityIndicator color={colors.white} /> : null}
         </View>
 
         <View style={styles.footer}>
@@ -167,7 +240,7 @@ export function CameraCaptureScreen({ sessionId, onCaptureComplete, onError, onC
             icon={phase === 'error' ? RefreshCw : Camera}
             label={phase === 'error' ? '重新采集' : '开始采集'}
             onPress={startCapture}
-            disabled={isBusy}
+            disabled={!canCapture}
           />
           <PrimaryButton label="返回首页" onPress={onCancel} variant="secondary" disabled={isBusy} />
         </View>
@@ -176,8 +249,46 @@ export function CameraCaptureScreen({ sessionId, onCaptureComplete, onError, onC
   );
 }
 
-function waitForCameraModeSwitch(): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, 350));
+function startRecording(recorder: Recorder): RecordingSession {
+  const resolver = createRecordingResolver();
+  const finished = new Promise<string>((resolve, reject) => {
+    resolver.resolve = resolve;
+    resolver.reject = reject;
+  });
+  const started = recorder.startRecording(
+    (filePath: string, reason: RecordingFinishedReason) => {
+      if (reason !== 'max-duration-reached' && reason !== 'stopped') {
+        resolver.reject(new Error(`自拍视频录制被中断：${reason}`));
+        return;
+      }
+
+      resolver.resolve(filePath);
+    },
+    resolver.reject,
+  ).catch((error) => {
+    resolver.reject(error);
+    throw error;
+  });
+
+  return { started, finished };
+}
+
+function createRecordingResolver(): RecordingResolver {
+  return {
+    resolve: () => undefined,
+    reject: () => undefined,
+  };
+}
+
+function waitForRecordingWarmup(): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, 250));
+}
+
+function clearProgressTimer(intervalRef: React.MutableRefObject<ReturnType<typeof setInterval> | undefined>) {
+  if (intervalRef.current) {
+    clearInterval(intervalRef.current);
+    intervalRef.current = undefined;
+  }
 }
 
 function normalizeCaptureError(error: unknown): string {
@@ -188,8 +299,16 @@ function normalizeCaptureError(error: unknown): string {
     return '自拍照采集失败，请保持手机稳定并重试。';
   }
 
-  if (message.includes('record') || message.includes('video')) {
+  if (message.includes('record') || message.includes('video') || message.includes('recorder')) {
     return '自拍视频录制失败，请检查麦克风/相机权限后重试。';
+  }
+
+  if (message.includes('permission')) {
+    return '相机或麦克风权限不可用，请授权后重试。';
+  }
+
+  if (message.includes('camera') || message.includes('device')) {
+    return '前置摄像头暂不可用，请重新打开页面后重试。';
   }
 
   return rawMessage || '拍摄或录制过程中发生错误。';

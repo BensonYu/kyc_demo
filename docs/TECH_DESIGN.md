@@ -18,7 +18,8 @@ Core modules:
 Recommended libraries:
 
 - React Native through Expo.
-- `expo-camera` for camera preview, still photo capture, and 5-second video recording.
+- `react-native-vision-camera` for camera preview, still photo capture, and 5-second video recording.
+- `react-native-nitro-modules`, `react-native-nitro-image`, `react-native-reanimated`, and `react-native-worklets` as VisionCamera V5 native/runtime dependencies.
 - `expo-file-system` for local session artifact handling.
 - Local Expo Module `modules/kyc-face-analyzer` for Android and iOS ML Kit post-capture face analysis.
 - Expo development build for future native modules beyond Expo Go.
@@ -79,7 +80,7 @@ Session data should include:
 
 - Use the front camera.
 - Show face alignment guidance.
-- Capture one still image before or after video recording.
+- Capture one still image from the same VisionCamera session used for video.
 - Store the photo URI in the session object.
 
 ### 5-Second Video
@@ -87,7 +88,8 @@ Session data should include:
 - Use front camera recording.
 - Record exactly one 5-second selfie clip where possible.
 - Show recording progress.
-- Stop automatically when the timer reaches 5 seconds.
+- Use a VisionCamera recorder with `maxDuration: 5`.
+- Start recording first, then capture the still photo while the video recorder is active.
 - Store the video URI and measured duration in the session object.
 - If the user cancels before 5 seconds, mark the session as retry.
 

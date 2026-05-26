@@ -38,6 +38,37 @@ describe('kycReducer', () => {
     expect(state.session.capture.videoDurationSeconds).toBe(5);
   });
 
+  it('stores post-capture face analysis without leaving review', () => {
+    const captured = kycReducer(createInitialState(), {
+      type: 'CAPTURE_COMPLETE',
+      payload: {
+        photoUri: 'file:///photo.jpg',
+        videoUri: 'file:///video.mov',
+        videoDurationSeconds: 5,
+        cameraInterrupted: false,
+      },
+    });
+
+    const analyzed = kycReducer(captured, {
+      type: 'CAPTURE_ANALYSIS_COMPLETE',
+      payload: {
+        provider: 'android_mlkit',
+        platformRoute: 'android',
+        faceDetected: true,
+        singleFace: true,
+        faceCentered: true,
+        brightnessOk: true,
+        blurOk: true,
+        occlusionOk: true,
+        confidence: 0.9,
+        reasons: ['人脸已通过 ML Kit 照片质量检查。'],
+      },
+    });
+
+    expect(analyzed.step).toBe('captureReview');
+    expect(analyzed.session.captureAnalysis?.provider).toBe('android_mlkit');
+  });
+
   it('moves to liveness after capture review is approved', () => {
     const captured = kycReducer(createInitialState(), {
       type: 'CAPTURE_COMPLETE',

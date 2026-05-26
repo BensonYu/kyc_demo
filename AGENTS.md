@@ -7,7 +7,7 @@ Build a high-fidelity front-end KYC demo with React and Expo. The product must c
 1. Ask for privacy consent and camera/microphone permissions.
 2. Capture a face photo.
 3. Record a 5-second selfie video.
-4. Ask the user to confirm photo quality for the demo.
+4. Run post-capture face quality analysis, with manual review fallback when native analysis is unavailable.
 5. Run a cross-platform liveness challenge.
 6. Run local quality checks and mock risk scoring.
 7. Show pass, retry, or manual review.
@@ -37,6 +37,7 @@ This is a demo, not a compliant production KYC system. Do not claim real identit
 - Model the KYC flow as an explicit state machine or a small typed reducer.
 - Keep capture, liveness, scoring, and result presentation separate.
 - When native liveness work starts, keep shared flow code in `src/shared` and isolate OS-specific analyzers in `src/platform/ios` and `src/platform/android`.
+- Android post-capture face analysis currently uses local Expo Module `modules/kyc-face-analyzer` with ML Kit; it requires a development build and must fall back cleanly in Expo Go.
 - Use deterministic mock scoring so pass/retry/review states can be tested.
 - Prefer clear user recovery paths over silent failures.
 - Keep UI copy honest: use "demo verification", "local checks", and "risk score" instead of "verified identity" until the in-house liveness implementation is production validated.

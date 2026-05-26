@@ -33,6 +33,31 @@ export type QualitySignals = {
   occlusionOk: boolean;
 };
 
+export type NormalizedFaceBox = {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+};
+
+export type FaceQualityResult = QualitySignals & {
+  provider: 'manual_review' | 'android_mlkit' | 'vision_camera' | 'ios_truedepth';
+  platformRoute: 'ios' | 'android' | 'fallback';
+  faceBox?: NormalizedFaceBox;
+  faceCount?: number;
+  imageSize?: {
+    width: number;
+    height: number;
+  };
+  faceAreaRatio?: number;
+  headYaw?: number;
+  headRoll?: number;
+  leftEyeOpenProbability?: number;
+  rightEyeOpenProbability?: number;
+  confidence: number;
+  reasons: string[];
+};
+
 export type LivenessSignal = {
   challengeType: LivenessChallengeType;
   challengeCompleted: boolean;
@@ -72,6 +97,7 @@ export type KycSession = {
   retryCount: number;
   permissions: PermissionSignals;
   capture: CaptureArtifacts;
+  captureAnalysis?: FaceQualityResult;
   quality: QualitySignals;
   liveness?: LivenessSignal;
   trueDepth: TrueDepthSignals;

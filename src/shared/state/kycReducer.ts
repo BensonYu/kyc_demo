@@ -1,6 +1,7 @@
 import { createInitialSession } from './session';
 import type {
   CaptureArtifacts,
+  FaceQualityResult,
   KycSession,
   KycState,
   KycStep,
@@ -20,6 +21,7 @@ export type KycAction =
   | { type: 'SET_BUSY'; payload: boolean }
   | { type: 'SET_ERROR'; payload?: string }
   | { type: 'CAPTURE_COMPLETE'; payload: CaptureArtifacts }
+  | { type: 'CAPTURE_ANALYSIS_COMPLETE'; payload: FaceQualityResult }
   | { type: 'CAPTURE_REVIEW_COMPLETE'; payload: QualitySignals }
   | { type: 'SET_QUALITY'; payload: QualitySignals }
   | { type: 'APPLY_MANUAL_REVIEW_DEMO_SIGNAL' }
@@ -80,8 +82,18 @@ export function kycReducer(state: KycState, action: KycAction): KycState {
         ...state,
         session: mergeSession(state.session, {
           capture: action.payload,
+          captureAnalysis: undefined,
         }),
         step: 'captureReview',
+        isBusy: false,
+        error: undefined,
+      };
+    case 'CAPTURE_ANALYSIS_COMPLETE':
+      return {
+        ...state,
+        session: mergeSession(state.session, {
+          captureAnalysis: action.payload,
+        }),
         isBusy: false,
         error: undefined,
       };

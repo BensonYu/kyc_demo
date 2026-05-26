@@ -3,9 +3,33 @@
 ## Current State
 
 - The app is an Expo SDK 56 React Native MVP with no backend.
-- The flow is: consent -> permissions -> camera capture -> photo quality review -> liveness challenge -> local scoring -> result.
+- The flow is: consent -> permissions -> camera capture -> post-capture photo analysis/manual fallback -> liveness challenge -> local scoring -> result.
 - Face ID, Touch ID, and Android device biometrics have been removed from the KYC flow. They must not be used as KYC, liveness, or identity signals.
-- Expo Camera does not provide reliable face-in-frame detection in this project. The current MVP uses a photo review screen as an explicit quality gate instead of pretending automatic detection exists.
+- Expo Camera does not provide reliable face-in-frame detection in this project. Android now has a local ML Kit post-capture analyzer; unsupported environments use a photo review screen as an explicit fallback quality gate.
+
+## Implemented Android Post-Capture Analyzer
+
+First Android milestone is now in place:
+
+- Local Expo Module: `modules/kyc-face-analyzer`.
+- Native dependency: `com.google.mlkit:face-detection:16.1.7`.
+- JS provider: `src/platform/android/faceAnalyzer.ts`.
+- Shared quality helpers: `src/platform/faceQuality.ts`.
+- Flow integration: `src/KycApp.tsx` analyzes the captured still photo before liveness.
+
+Behavior:
+
+- Android development builds call ML Kit after photo/video capture.
+- Passing captures auto-advance to action liveness.
+- No face, multiple faces, face outside the guide frame, face too small/large, or excessive pose angle blocks the flow and requires retake.
+- If the native module is missing or throws, the app falls back to manual photo review.
+- Expo Go cannot load this module; use `npx expo run:android` or EAS development build for validation.
+
+Current limitations:
+
+- Brightness, blur, and occlusion are still basic placeholders in the native result.
+- Face box coordinates are normalized from the captured image and drawn over the review image; real-time camera gating is still future VisionCamera work.
+- This is face presence/quality analysis, not identity verification or production-grade anti-spoofing.
 
 ## Goal for Next Phase
 

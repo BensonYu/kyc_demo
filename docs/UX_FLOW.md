@@ -16,7 +16,7 @@
 | Consent | Explain local capture and demo use. | 同意并继续 |
 | Permissions | Request camera and microphone access. | 授权 |
 | Camera Capture | Align face, capture photo, record video. | 开始拍摄 |
-| Capture Review | Confirm face is in frame and clear. | 确认照片合格 |
+| Capture Review | Run post-capture face analysis or manual fallback. | 继续动作活体 / 重新拍摄 |
 | Liveness Challenge | Complete action challenge. | 完成动作 |
 | Processing | Run local checks and scoring. | None |
 | Result Pass | Show successful demo result. | 完成 |
@@ -85,6 +85,7 @@ Happy path:
 3. App starts 5-second video recording.
 4. Progress reaches 5 seconds.
 5. App stops recording and continues to photo review.
+6. Android development builds run local ML Kit face analysis before liveness. Unsupported environments show manual review.
 
 Recovery states:
 
@@ -98,16 +99,23 @@ Recovery states:
 
 Purpose:
 
-- Prevent the flow from accepting an obviously bad capture when automatic face detection is not available in MVP.
+- Prevent the flow from accepting an obviously bad capture before liveness.
+- Use Android ML Kit post-capture analysis when available.
+- Fall back to explicit manual review when native analysis is unavailable.
 
 Copy:
 
-- "请确认画面中只有一个人脸，并且脸部在框内、清晰、无遮挡。"
+- Analyzing: "正在自动检查自拍照"
+- Passed: "人脸位置已通过自动检查"
+- Failed: "自拍照需要重拍"
+- Fallback: "请确认画面中只有一个人脸，并且脸部在框内、清晰、无遮挡。"
 
 Outcomes:
 
-- Confirmed: continue to liveness.
-- Not acceptable: return to camera capture.
+- Android ML Kit passes: continue to liveness automatically or through the continue CTA.
+- Android ML Kit blocks: require retake; no manual override.
+- Native analyzer unavailable: show manual confirmation fallback.
+- Not acceptable in manual fallback: return to camera capture.
 
 This step is a demo quality gate, not automatic identity verification.
 
@@ -203,6 +211,8 @@ Secondary action:
 | Microphone permission denied | Explain video recording needs microphone access; allow retry. |
 | Camera unavailable | Show device limitation and return home. |
 | Face outside frame in review | Ask user to retake. |
+| Android ML Kit reports no face | Require retake before liveness. |
+| Android ML Kit reports face too small/large or pose too high | Require retake with the analyzer reason. |
 | Video shorter than 5 seconds | Show retry with clear reason. |
 | Multiple faces detected | Ask user to retry alone in frame. |
 | App backgrounded during capture | Cancel current recording and ask user to retry. |

@@ -32,6 +32,36 @@ The scoring engine produces three possible decisions:
 | `blurOk` | boolean | Face is not too blurry. |
 | `occlusionOk` | boolean | No major occlusion such as mask, hand, or sunglasses. |
 
+### Android ML Kit Post-Capture Signals
+
+These signals are produced by the local Android Expo Module when available:
+
+| Signal | Type | Description |
+| --- | --- | --- |
+| `provider` | enum | `android_mlkit` when the native module completed analysis. |
+| `faceCount` | number | Number of faces detected in the captured still photo. |
+| `faceBox` | object | Normalized detected face rectangle in image coordinates. |
+| `imageSize` | object | Width and height of the analyzed image. |
+| `faceAreaRatio` | number | Face box area divided by image area. |
+| `headYaw` | number | Horizontal head rotation from ML Kit. |
+| `headRoll` | number | Roll angle from ML Kit. |
+| `leftEyeOpenProbability` | number | Optional ML Kit classification output. |
+| `rightEyeOpenProbability` | number | Optional ML Kit classification output. |
+| `confidence` | number | Demo confidence for this capture-quality check. |
+| `reasons` | string[] | Human-readable analysis notes. |
+
+Android ML Kit post-capture rules:
+
+- If `faceCount === 0`, block and require retake.
+- If `faceCount > 1`, block and require retake.
+- If the normalized `faceBox` is outside the guide frame, block and require retake.
+- If `faceAreaRatio < 0.12`, block and ask the user to move closer.
+- If `faceAreaRatio > 0.62`, block and ask the user to move farther away.
+- If `abs(headYaw) > 22` or `abs(headRoll) > 18`, block and ask the user to face the camera.
+- If eye-open probabilities are unavailable but other checks pass, do not block; note lower confidence for later action liveness.
+
+Unsupported native analysis is neutral and falls back to manual review; it must not silently pass.
+
 ### Liveness Signals
 
 | Signal | Type | Description |
@@ -65,6 +95,7 @@ Return `retry` immediately if any blocking condition is true:
 - `cameraInterrupted` is true.
 - `faceDetected` is false.
 - `singleFace` is false.
+- Android ML Kit reports face outside the guide frame, face too small/large, or excessive pose angle.
 - `challengeCompleted` is false.
 - `challengeTimeout` is true.
 

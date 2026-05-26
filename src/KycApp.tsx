@@ -11,6 +11,7 @@ import { ProcessingScreen } from './shared/screens/ProcessingScreen';
 import { ResultScreen } from './shared/screens/ResultScreen';
 import { createInitialState, kycReducer } from './shared/state/kycReducer';
 import { scoreKycSession } from './shared/services/scoring';
+import { getQualitySignals, isCaptureAnalysisPassing, SELFIE_GUIDE_BOX } from './shared/services/faceQuality';
 import { getPlatformCapabilities } from './platform';
 import type { CaptureArtifacts, LivenessSignal, PermissionSignals, QualitySignals } from './shared/types/kyc';
 
@@ -19,6 +20,7 @@ export function KycApp() {
   const [, requestCameraPermission, getCameraPermission] = useCameraPermissions();
   const [, requestMicrophonePermission, getMicrophonePermission] = useMicrophonePermissions();
   const processingSessionIdRef = useRef<string | undefined>(undefined);
+  const captureAnalysisUriRef = useRef<string | undefined>(undefined);
 
   const syncPermissions = useCallback(async () => {
     dispatch({ type: 'SET_BUSY', payload: true });
@@ -103,6 +105,50 @@ export function KycApp() {
     };
   }, [state.step, state.session.id]);
 
+  useEffect(() => {
+    if (state.step !== 'captureReview') {
+      captureAnalysisUriRef.current = undefined;
+      return;
+    }
+
+    const capture = state.session.capture;
+    if (!capture.photoUri || captureAnalysisUriRef.current === capture.photoUri) {
+      return;
+    }
+
+    captureAnalysisUriRef.current = capture.photoUri;
+    let canceled = false;
+
+    const analyzeCapture = async () => {
+      dispatch({ type: 'SET_BUSY', payload: true });
+      const capabilities = getPlatformCapabilities();
+      const result = await capabilities.face.analyzeCapture({
+        capture,
+        guideBox: SELFIE_GUIDE_BOX,
+      });
+
+      if (canceled) {
+        return;
+      }
+
+      dispatch({ type: 'CAPTURE_ANALYSIS_COMPLETE', payload: result });
+
+      if (isCaptureAnalysisPassing(result)) {
+        dispatch({ type: 'CAPTURE_REVIEW_COMPLETE', payload: getQualitySignals(result) });
+      }
+    };
+
+    analyzeCapture().catch((error) => {
+      if (!canceled) {
+        dispatch({ type: 'SET_ERROR', payload: error instanceof Error ? error.message : '照片质量分析失败，请重新拍摄。' });
+      }
+    });
+
+    return () => {
+      canceled = true;
+    };
+  }, [state.step, state.session.capture.photoUri]);
+
   const handleCaptureComplete = (capture: CaptureArtifacts) => {
     dispatch({ type: 'CAPTURE_COMPLETE', payload: capture });
   };
@@ -161,6 +207,8 @@ export function KycApp() {
     return (
       <CaptureReviewScreen
         capture={state.session.capture}
+        analysis={state.session.captureAnalysis}
+        isAnalyzing={state.isBusy && !state.session.captureAnalysis}
         onApprove={handleCaptureReviewComplete}
         onRetake={() => dispatch({ type: 'RETRY' })}
       />

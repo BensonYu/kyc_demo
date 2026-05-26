@@ -9,7 +9,7 @@ Core modules:
 - App shell and navigation.
 - Permission manager.
 - Camera capture module.
-- Capture review module.
+- Post-capture face analyzer with manual review fallback.
 - Liveness challenge module.
 - Local quality check module.
 - Mock scoring engine.
@@ -20,6 +20,7 @@ Recommended libraries:
 - React Native through Expo.
 - `expo-camera` for camera preview, still photo capture, and 5-second video recording.
 - `expo-file-system` for local session artifact handling.
+- Local Expo Module `modules/kyc-face-analyzer` for Android ML Kit post-capture face analysis.
 - Expo development build for future native modules beyond Expo Go.
 
 ## 2. Runtime Boundaries
@@ -47,7 +48,7 @@ Recommended states:
 | `cameraReady` | Camera preview is visible and ready. |
 | `capturingPhoto` | App is taking the face photo. |
 | `recordingVideo` | App is recording the 5-second selfie video. |
-| `captureReview` | User confirms photo quality before liveness. |
+| `captureReview` | App analyzes the captured photo; unsupported platforms fall back to user photo review before liveness. |
 | `livenessChallenge` | User is completing action challenge fallback/core liveness. |
 | `processing` | App runs quality checks and mock scoring. |
 | `resultPass` | Demo verification passed. |
@@ -64,6 +65,7 @@ Session data should include:
 - Video duration.
 - Permission statuses.
 - Photo quality review result.
+- Native post-capture face analysis result, when available.
 - Liveness challenge type and result.
 - Quality check signals.
 - Mock risk score.
@@ -89,7 +91,7 @@ Session data should include:
 
 ### Capture Quality Inputs
 
-The MVP can start with heuristic or mocked signals if frame-level analysis is not yet implemented:
+The MVP now uses Android ML Kit for the first post-capture automatic gate when running in an Android development build. Expo Go, iOS, web, and unsupported devices fall back to explicit photo review.
 
 - Face present.
 - Single face.
@@ -99,7 +101,9 @@ The MVP can start with heuristic or mocked signals if frame-level analysis is no
 - Video duration at least 5 seconds.
 - No obvious camera interruption.
 
-MVP quality signals come from explicit photo review. Future implementations should replace review with in-house frame analysis, platform-native face detection, and liveness checks rather than third-party KYC SDKs.
+Android ML Kit currently verifies the captured still photo after capture and before action liveness. It returns normalized face box, face count, head yaw/roll, eye-open probabilities when available, confidence, and reasons. The shared flow blocks liveness and requires retake when Android ML Kit reports no face, multiple faces, face outside the guide frame, face too small/large, or excessive pose angle.
+
+Manual review remains only a fallback for environments where native analysis is unavailable. Future implementations should replace fallback review with in-house frame analysis, platform-native face detection, and liveness checks rather than third-party KYC SDKs.
 
 ## 5. Device Biometrics Boundary
 
@@ -169,12 +173,23 @@ TrueDepth should improve confidence but must degrade gracefully on unsupported d
 
 Android does not have a universal equivalent to iOS TrueDepth. The app should use:
 
-- Android native ML Kit face detection for face box, landmarks, eye-open probability, and pose signals.
+- Android native ML Kit face detection for post-capture face box, landmarks, eye-open probability, and pose signals.
 - Action challenge liveness verified from Android-native signals.
 - Video duration and quality checks.
 - Manual review state when signals are mixed.
 
 No Android feature should block the whole MVP unless camera or microphone access is unavailable.
+
+Current Android native module:
+
+```text
+modules/
+  kyc-face-analyzer/
+    android/
+      src/main/java/com/bensonyu/kycdemo/faceanalyzer/KycFaceAnalyzerModule.kt
+```
+
+It uses Google ML Kit Face Detection `com.google.mlkit:face-detection:16.1.7`. Because it is a custom native module, it requires `npx expo run:android` or an EAS development build. Expo Go cannot load this analyzer and will use the manual review fallback.
 
 ## 9. Mock Scoring Engine
 

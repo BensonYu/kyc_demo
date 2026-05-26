@@ -1,19 +1,6 @@
-import type { CaptureArtifacts, LivenessSignal, QualitySignals, TrueDepthSignals } from '../shared/types/kyc';
+import type { CaptureArtifacts, FaceQualityResult, LivenessSignal, NormalizedFaceBox, TrueDepthSignals } from '../shared/types/kyc';
 
-export type NormalizedFaceBox = {
-  x: number;
-  y: number;
-  width: number;
-  height: number;
-};
-
-export type FaceQualityResult = QualitySignals & {
-  provider: 'manual_review' | 'android_mlkit' | 'vision_camera' | 'ios_truedepth';
-  platformRoute: 'ios' | 'android' | 'fallback';
-  faceBox?: NormalizedFaceBox;
-  confidence: number;
-  reasons: string[];
-};
+export type { FaceQualityResult, NormalizedFaceBox };
 
 export type FaceAnalyzer = {
   analyzeCapture(input: {
@@ -46,4 +33,3 @@ export type PlatformCapabilities = {
   liveness: LivenessAnalyzer;
   trueDepth: TrueDepthProvider;
 };
-
